@@ -495,6 +495,13 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   setHostIfExplicit("localContext", config.localContext, existing.localContext);
   setHostIfExplicit("endpoint", config.endpoint, existing.endpoint);
 
+  // Preserve a host-scoped apiKey already on disk. This integration never writes
+  // apiKey (config.apiKey is the *resolved* key — env/root — and must not be
+  // materialized here), but must not drop hosts.<host>.apiKey on rewrite.
+  if (existingHost.apiKey !== undefined) {
+    hostEntry.apiKey = existingHost.apiKey;
+  }
+
   existing.hosts[host] = hostEntry;
 
   writeFileSync(CONFIG_FILE, JSON.stringify(existing, null, 2));
