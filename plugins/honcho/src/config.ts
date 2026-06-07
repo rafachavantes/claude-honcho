@@ -59,6 +59,9 @@ export type HonchoHost = "cursor" | "claude_code" | "obsidian";
 
 export type ObservationMode = "unified" | "directional";
 
+export type ContextScope = "global" | "session";
+export type WriteMode = "inline" | "detached" | "deferred";
+
 export interface HostConfig {
   /** Honcho workspace name for this host */
   workspace?: string;
@@ -86,6 +89,12 @@ export interface HostConfig {
    * "directional": this AI keeps its own view of the user (observer=aiPeer, observed=user).
    */
   observationMode?: ObservationMode;
+  /** Context scope for Honcho queries (default: "global") */
+  contextScope?: ContextScope;
+  /** Write mode for observations (default: "inline") */
+  writeMode?: WriteMode;
+  /** Whether to capture tool calls as observations (default: true) */
+  captureToolCalls?: boolean;
   messageUpload?: MessageUploadConfig;
   contextRefresh?: ContextRefreshConfig;
   localContext?: LocalContextConfig;
@@ -184,6 +193,12 @@ interface HonchoFileConfig {
   reasoningLevel?: ReasoningLevel;
   /** Observation mode (default: "unified") */
   observationMode?: ObservationMode;
+  /** Context scope for Honcho queries (default: "global") */
+  contextScope?: ContextScope;
+  /** Write mode for observations (default: "inline") */
+  writeMode?: WriteMode;
+  /** Whether to capture tool calls as observations (default: true) */
+  captureToolCalls?: boolean;
   /** Memory statusLine visibility: "on" (default) · "off" */
   statusline?: StatuslineMode;
   hosts?: Record<string, HostConfig>;
@@ -225,6 +240,12 @@ export interface HonchoCLAUDEConfig {
    * "directional": this AI keeps its own per-AI view of the user.
    */
   observationMode?: ObservationMode;
+  /** Context scope for Honcho queries (default: "global") */
+  contextScope?: ContextScope;
+  /** Write mode for observations (default: "inline") */
+  writeMode?: WriteMode;
+  /** Whether to capture tool calls as observations (default: true) */
+  captureToolCalls?: boolean;
   /** Memory statusLine visibility: "on" (default) · "off" */
   statusline?: StatuslineMode;
   /** Token-based upload limits */
@@ -341,6 +362,9 @@ function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDECon
     saveMessages: hostBlock?.saveMessages ?? raw.saveMessages,
     reasoningLevel: hostBlock?.reasoningLevel ?? raw.reasoningLevel,
     observationMode: hostBlock?.observationMode ?? raw.observationMode,
+    contextScope: hostBlock?.contextScope ?? raw.contextScope,
+    writeMode: hostBlock?.writeMode ?? raw.writeMode,
+    captureToolCalls: hostBlock?.captureToolCalls ?? raw.captureToolCalls,
     messageUpload: hostBlock?.messageUpload ?? raw.messageUpload,
     contextRefresh: hostBlock?.contextRefresh ?? raw.contextRefresh,
     endpoint: hostBlock?.endpoint ?? raw.endpoint,
@@ -496,6 +520,9 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   setHostIfExplicit("sessionPeerPrefix", config.sessionPeerPrefix, existing.sessionPeerPrefix);
   setHostIfExplicit("reasoningLevel", config.reasoningLevel, existing.reasoningLevel);
   setHostIfExplicit("observationMode", config.observationMode, existing.observationMode);
+  setHostIfExplicit("contextScope", config.contextScope, existing.contextScope);
+  setHostIfExplicit("writeMode", config.writeMode, existing.writeMode);
+  setHostIfExplicit("captureToolCalls", config.captureToolCalls, existing.captureToolCalls);
   setHostIfExplicit("messageUpload", config.messageUpload, existing.messageUpload);
   setHostIfExplicit("contextRefresh", config.contextRefresh, existing.contextRefresh);
   setHostIfExplicit("localContext", config.localContext, existing.localContext);
@@ -739,6 +766,10 @@ const VALID_ENVIRONMENTS = new Set<HonchoEnvironment>(["production", "local"]);
 export function getObservationMode(config: HonchoCLAUDEConfig): ObservationMode {
   return config.observationMode ?? "unified";
 }
+
+export function getContextScope(config: HonchoCLAUDEConfig): ContextScope { return config.contextScope ?? "global"; }
+export function getWriteMode(config: HonchoCLAUDEConfig): WriteMode { return config.writeMode ?? "inline"; }
+export function shouldCaptureToolCalls(config: HonchoCLAUDEConfig): boolean { return config.captureToolCalls ?? true; }
 
 export function setEndpoint(environment?: HonchoEnvironment, baseUrl?: string): void {
   const config = loadConfig();

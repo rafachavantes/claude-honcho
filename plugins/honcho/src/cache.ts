@@ -250,23 +250,31 @@ export function resetMessageCount(): void {
 // ============================================
 
 interface QueuedMessage {
+  id: string;
   content: string;
   peerId: string;
   cwd: string;
   timestamp: string;
   uploaded?: boolean;
   instanceId?: string; // Claude Code instance for parallel session support
+  metadata?: Record<string, unknown>;
 }
 
-export function queueMessage(content: string, peerId: string, cwd: string, instanceId?: string): void {
+function newId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function queueMessage(content: string, peerId: string, cwd: string, instanceId?: string, metadata?: Record<string, unknown>): void {
   ensureCacheDir();
   const message: QueuedMessage = {
+    id: newId(),
     content,
     peerId,
     cwd,
     timestamp: new Date().toISOString(),
     uploaded: false,
     instanceId: instanceId || getClaudeInstanceId() || undefined,
+    metadata,
   };
   appendFileSync(MESSAGE_QUEUE_FILE, JSON.stringify(message) + "\n");
 }
@@ -319,6 +327,28 @@ export function markMessagesUploaded(forCwd?: string): void {
   } catch {
     // ignore
   }
+}
+
+export function markMessagesUploadedByIds(ids: string[]): void {
+  ensureCacheDir();
+  if (!existsSync(MESSAGE_QUEUE_FILE) || ids.length === 0) return;
+  const idSet = new Set(ids);
+  try {
+    const content = readFileSync(MESSAGE_QUEUE_FILE, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim());
+    const remaining = lines.filter((line) => { try { return !idSet.has(JSON.parse(line).id); } catch { return false; } });
+    writeFileSync(MESSAGE_QUEUE_FILE, remaining.join("\n") + (remaining.length ? "\n" : ""));
+  } catch { /* ignore */ }
+}
+
+export function spawnFlusher(cwd: string, sessionName: string, host: string): void {
+  try {
+    Bun.spawn([process.execPath, "run", `${process.env.CLAUDE_PLUGIN_ROOT}/src/flush.ts`], {
+      detached: true,
+      stdio: ["ignore", "ignore", "ignore"],
+      env: { ...process.env, HONCHO_FLUSH_CWD: cwd, HONCHO_FLUSH_SESSION: sessionName, HONCHO_FLUSH_HOST: host },
+    }).unref();
+  } catch { /* best-effort: if spawn fails, queue stays for next flush/session-end */ }
 }
 
 // ============================================

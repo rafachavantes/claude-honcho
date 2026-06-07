@@ -25,7 +25,9 @@ import {
   type ObservationMode,
   type StatuslineMode,
   getObservationMode,
+  getContextScope,
 } from "../config.js";
+import { buildScopedContext } from "../context-builder.js";
 import { honchoSessionUrl } from "../styles.js";
 import {
   getLastActiveCwd,
@@ -882,6 +884,13 @@ export async function runMcpServer(): Promise<void> {
         case "get_context": {
           const maxConclusions = (args?.max_conclusions as number) ?? 25;
 
+          if (getContextScope(config) === "session" && sessionName) {
+            const sc = await buildScopedContext(honcho, config, { sessionName, maxConclusions });
+            return {
+              content: [{ type: "text", text: JSON.stringify({ representation: sc.representation, peerCard: sc.peerCard, summary: sc.summary }, null, 2) }],
+            };
+          }
+
           const ctx = await activePeer.context({
             ...(contextTarget ? { target: contextTarget } : {}),
             maxConclusions,
@@ -894,6 +903,13 @@ export async function runMcpServer(): Promise<void> {
         }
 
         case "get_representation": {
+          if (getContextScope(config) === "session" && sessionName) {
+            const sc = await buildScopedContext(honcho, config, { sessionName });
+            return {
+              content: [{ type: "text", text: sc.representation ?? "No representation available" }],
+            };
+          }
+
           const rep = await activePeer.representation(
             contextTarget ? { target: contextTarget } : undefined
           );

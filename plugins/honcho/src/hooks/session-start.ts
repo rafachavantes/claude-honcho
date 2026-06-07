@@ -1,5 +1,6 @@
 import { Honcho } from "@honcho-ai/sdk";
 import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode } from "../config.js";
+import { buildScopedContext } from "../context-builder.js";
 import {
   setCachedUserContext,
   setCachedSessionId,
@@ -166,13 +167,8 @@ export async function handleSessionStart(): Promise<void> {
     const fetchStart = Date.now();
     const dialecticLevel = config.reasoningLevel ?? "low";
 
-    // unified: user observes self — use userPeer, no target.
-    // directional: aiPeer observes user — use aiPeer with target.
-    const contextLabel = observationMode === "unified" ? "userPeer.context()" : "aiPeer.context(target=user)";
     const [userContextResult] = await Promise.allSettled([
-      observationMode === "unified"
-        ? userPeer.context({ maxConclusions: 25, includeMostFrequent: true })
-        : aiPeer.context({ target: config.peerName, maxConclusions: 25, includeMostFrequent: true }),
+      buildScopedContext(honcho, config, { sessionName, maxConclusions: 25, summary: true }),
     ]);
 
     // Dialectic: fire-and-forget. Results feed the knowledge graph;
@@ -201,21 +197,21 @@ export async function handleSessionStart(): Promise<void> {
 
     const fetchDuration = Date.now() - fetchStart;
     const asyncResults = [
-      { name: contextLabel, success: userContextResult.status === "fulfilled" },
+      { name: "buildScopedContext()", success: userContextResult.status === "fulfilled" },
     ];
     const successCount = asyncResults.filter(r => r.success).length;
     logAsync("context-fetch", `Context: ${successCount}/1 succeeded in ${fetchDuration}ms (dialectic fire-and-forget)`, asyncResults);
 
     // Verbose output (file-based — ~/.honcho/verbose.log)
     if (userContextResult.status === "fulfilled" && userContextResult.value) {
-      const ctx = userContextResult.value as any;
-      verboseApiResult(`${contextLabel} → representation`, ctx.representation);
-      verboseList(`${contextLabel} → peerCard`, ctx.peerCard);
+      const ctx = userContextResult.value;
+      verboseApiResult(`buildScopedContext() → representation`, ctx.representation);
+      verboseList(`buildScopedContext() → peerCard`, ctx.peerCard);
     }
 
     // Cache results for user-prompt hook
     if (userContextResult.status === "fulfilled" && userContextResult.value) {
-      const context = userContextResult.value as any;
+      const context = userContextResult.value;
       setCachedUserContext(context);
       const rep = context.representation;
       const count = typeof rep === "string" ? rep.split("\n").filter((l: string) => l.trim() && !l.startsWith("#")).length : 0;
