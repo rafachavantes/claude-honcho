@@ -1,8 +1,8 @@
 {
-  "name": "honcho",
+  "name": "honcho-rafa",
   "owner": {
-    "name": "Plastic Labs",
-    "email": "hello@plasticlabs.ai"
+    "name": "Rafael Chavantes (fork)",
+    "email": "contato@moara.digital"
   },
   "metadata": {
     "description": "Honcho plugins for Claude Code - memory, development tools, and more",
