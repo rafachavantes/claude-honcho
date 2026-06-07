@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin } from "../config.js";
+import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, shouldCaptureToolCalls } from "../config.js";
 import { appendClaudeWork, getClaudeInstanceId } from "../cache.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
 import { visCapture } from "../visual.js";
@@ -224,6 +224,12 @@ export async function handlePostToolUse(): Promise<void> {
 
   // INSTANT: Update local claude context file (~2ms)
   appendClaudeWork(summary);
+
+  // captureToolCalls=false skips the Honcho upload (avoids noise + per-tool latency)
+  // while still keeping the instant local context file above.
+  if (!shouldCaptureToolCalls(config)) {
+    process.exit(0);
+  }
 
   // Upload to Honcho and wait for completion
   await logToHonchoAsync(config, cwd, summary).catch((e) => logHook("post-tool-use", `Upload failed: ${e}`, { error: String(e) }));
