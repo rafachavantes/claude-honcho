@@ -4,6 +4,7 @@ import { Spinner } from "../spinner.js";
 import { setMemoryState } from "../state.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
 import { formatVerboseBlock, formatVerboseList } from "../visual.js";
+import { buildScopedContext } from "../context-builder.js";
 
 
 interface HookInput {
@@ -154,11 +155,7 @@ export async function handlePreCompact(): Promise<void> {
 
     const [userContextResult, summariesResult, userChatResult, claudeChatResult] =
       await Promise.allSettled([
-        contextPeer.context({
-          ...(contextTarget ? { target: contextTarget } : {}),
-          maxConclusions: 30,
-          includeMostFrequent: true,
-        }),
+        buildScopedContext(honcho, config, { sessionName, maxConclusions: 30, summary: false }),
         // Session summaries
         session.summaries(),
         // Fresh dialectic - ask about user (worth the cost at compaction time)
@@ -181,8 +178,8 @@ export async function handlePreCompact(): Promise<void> {
     // memory card. PreCompact stdout is only shown in Ctrl+O, so verbose data
     // is hidden by default and visible when the user presses Ctrl+O.
     const verboseBlocks: string[] = [];
-    verboseBlocks.push(formatVerboseBlock(`pre-compact ${contextLabel}`, (userContext as any)?.representation));
-    verboseBlocks.push(formatVerboseList("pre-compact peerCard", (userContext as any)?.peerCard));
+    verboseBlocks.push(formatVerboseBlock(`pre-compact ${contextLabel}`, userContext?.representation));
+    verboseBlocks.push(formatVerboseList("pre-compact peerCard", userContext?.peerCard));
 
     const userDialectic =
       userChatResult.status === "fulfilled"
