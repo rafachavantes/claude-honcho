@@ -1,7 +1,8 @@
 import { Honcho } from "@honcho-ai/sdk";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode } from "../config.js";
+import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin } from "../config.js";
+import { buildScopedContext } from "../context-builder.js";
 import {
   getCachedUserContext,
   getStaleCachedUserContext,
@@ -190,7 +191,7 @@ export async function handleUserPrompt(): Promise<void> {
   setMemoryState("recalling", undefined, hookInput.session_id);
 
   const fetchResult = await Promise.race([
-    fetchFreshContext(config, prompt).then(r => ({ ok: true as const, ...r })),
+    fetchFreshContext(config, prompt, sessionName).then(r => ({ ok: true as const, ...r })),
     new Promise<{ ok: false }>(resolve => setTimeout(() => resolve({ ok: false }), FETCH_TIMEOUT_MS)),
   ]).catch((): { ok: false } => ({ ok: false }));
 
@@ -232,80 +233,41 @@ function serveContext(
   outputContext(peerName, contextParts, sessionLink ? `${sessionLink}\n${visMsg}` : visMsg);
 }
 
-async function fetchFreshContext(config: any, prompt: string): Promise<{ context: any }> {
+async function fetchFreshContext(config: any, prompt: string, sessionName: string): Promise<{ context: any }> {
   const honcho = new Honcho(getHonchoClientOptions(config));
-  const observationMode = getObservationMode(config);
-
-  // unified: user self-observations — query via userPeer (no target).
-  // directional: ai cross-observations — query via aiPeer with target.
-  const contextPeer = observationMode === "unified"
-    ? await honcho.peer(config.peerName)
-    : await honcho.peer(config.aiPeer);
-  const contextTarget = observationMode === "unified" ? undefined : config.peerName;
-  const contextLabel = observationMode === "unified" ? "userPeer.context" : "aiPeer.context";
 
   const startTime = Date.now();
 
-  // Try search-based context first — returns conclusions relevant to the prompt
   const topics = extractTopics(prompt);
   const searchQuery = topics.length > 0 ? topics.join(" ") : undefined;
 
-  let contextResult: any = null;
-
-  if (searchQuery) {
-    try {
-      contextResult = await contextPeer.context({
-        ...(contextTarget ? { target: contextTarget } : {}),
-        searchQuery,
-        searchTopK: 5,
-        searchMaxDistance: 0.7,
-        maxConclusions: 15,
-        includeMostFrequent: true,
-      });
-      logApiCall(contextLabel, "GET", `search: ${searchQuery.slice(0, 60)}`, Date.now() - startTime, true);
-    } catch (e) {
-      // Search failed — fall through to static context
-      logHook("user-prompt", `Search context failed, falling back to static: ${e}`);
-    }
+  try {
+    const scoped = await buildScopedContext(honcho, config, { sessionName, searchQuery, maxConclusions: 12, summary: true });
+    logApiCall("buildScopedContext", "GET", searchQuery ? `search: ${searchQuery.slice(0, 60)}` : "static context", Date.now() - startTime, true);
+    setCachedUserContext(scoped);
+    verboseApiResult("peer.context() -> representation (fresh)", scoped.representation);
+    verboseList("peer.context() -> peerCard (fresh)", scoped.peerCard);
+    return { context: scoped };
+  } catch (e) {
+    logHook("user-prompt", `buildScopedContext failed: ${e}`);
+    throw e;
   }
-
-  // Fallback: static context (no search query)
-  if (!contextResult) {
-    contextResult = await contextPeer.context({
-      ...(contextTarget ? { target: contextTarget } : {}),
-      maxConclusions: 15,
-      includeMostFrequent: true,
-    });
-    logApiCall(contextLabel, "GET", `static context`, Date.now() - startTime, true);
-  }
-
-  if (contextResult) {
-    setCachedUserContext(contextResult);
-    verboseApiResult("peer.context() -> representation (fresh)", (contextResult as any).representation);
-    verboseList("peer.context() -> peerCard (fresh)", (contextResult as any).peerCard);
-  }
-
-  return { context: contextResult };
 }
 
 function formatCachedContext(context: any, peerName: string): { parts: string[]; conclusionCount: number } {
   const parts: string[] = [];
   let conclusionCount = 0;
+  if (context?.peerCard?.length) parts.push(`Profile: ${context.peerCard.join("; ")}`);
+  const summaryContent = typeof context?.summary === "string" ? context.summary : context?.summary?.content;
+  if (summaryContent && String(summaryContent).trim()) parts.push(`Project summary: ${String(summaryContent).trim().slice(0, 600)}`);
   const rep = context?.representation;
-
   if (typeof rep === "string" && rep.trim()) {
     const lines = rep.split("\n").filter((l: string) => l.trim() && !l.startsWith("#"));
     const selected = lines.slice(0, 5);
     conclusionCount = selected.length;
     const summary = selected.map((l: string) => l.replace(/^\[.*?\]\s*/, "").replace(/^- /, "")).join("; ");
-    if (summary) parts.push(`Relevant conclusions: ${summary}`);
+    if (summary) parts.push(`Relevant project conclusions: ${summary}`);
   }
-
-  const peerCard = context?.peerCard;
-  if (peerCard?.length) {
-    parts.push(`Profile: ${peerCard.join("; ")}`);
-  }
-
   return { parts, conclusionCount };
 }
 
