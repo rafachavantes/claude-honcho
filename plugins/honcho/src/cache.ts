@@ -341,6 +341,16 @@ export function markMessagesUploadedByIds(ids: string[]): void {
   } catch { /* ignore */ }
 }
 
+export function spawnFlusher(cwd: string, sessionName: string, host: string): void {
+  try {
+    Bun.spawn([process.execPath, "run", `${process.env.CLAUDE_PLUGIN_ROOT}/src/flush.ts`], {
+      detached: true,
+      stdio: ["ignore", "ignore", "ignore"],
+      env: { ...process.env, HONCHO_FLUSH_CWD: cwd, HONCHO_FLUSH_SESSION: sessionName, HONCHO_FLUSH_HOST: host },
+    }).unref();
+  } catch { /* best-effort: if spawn fails, queue stays for next flush/session-end */ }
+}
+
 // ============================================
 // CLAUDE Context File - self-summary
 // ============================================

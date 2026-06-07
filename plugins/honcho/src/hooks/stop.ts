@@ -1,7 +1,8 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin } from "../config.js";
+import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getWriteMode, getDetectedHost } from "../config.js";
 import { existsSync, readFileSync } from "fs";
-import { getInstanceIdForCwd } from "../cache.js";
+import { getInstanceIdForCwd, queueMessage, spawnFlusher } from "../cache.js";
+import { drainInline } from "../flush.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
 import { visStopMessage } from "../visual.js";
 
@@ -144,25 +145,35 @@ export async function handleStop(): Promise<void> {
   logHook("stop", `Capturing assistant response (${lastMessage.length} chars)`);
 
   try {
-    const honcho = new Honcho(getHonchoClientOptions(config));
-
-    // Get session and peer using new fluent API
-    const session = await honcho.session(sessionName);
-    const aiPeer = await honcho.peer(config.aiPeer);
-
-    // Upload the assistant response
-    logApiCall("session.addMessages", "POST", `assistant response (${lastMessage.length} chars)`);
-
-    await session.addMessages([
-      aiPeer.message(lastMessage.slice(0, 3000), {
-        createdAt: new Date().toISOString(),
-        metadata: {
-          instance_id: instanceId || undefined,
-          type: "assistant_response",
-          session_affinity: sessionName,
-        },
-      }),
-    ]);
+    const mode = getWriteMode(config);
+    if (mode === "deferred") {
+      // legacy: direct upload (waits for SessionEnd normally, but stop hook does it directly)
+      logApiCall("session.addMessages", "POST", `assistant response (${lastMessage.length} chars)`);
+      const honcho = new Honcho(getHonchoClientOptions(config));
+      const session = await honcho.session(sessionName);
+      const aiPeer = await honcho.peer(config.aiPeer);
+      await session.addMessages([
+        aiPeer.message(lastMessage.slice(0, 3000), {
+          createdAt: new Date().toISOString(),
+          metadata: {
+            instance_id: instanceId || undefined,
+            type: "assistant_response",
+            session_affinity: sessionName,
+          },
+        }),
+      ]);
+    } else {
+      queueMessage(lastMessage.slice(0, 3000), config.aiPeer, cwd, instanceId || undefined, {
+        type: "assistant_response",
+        session_affinity: sessionName,
+      });
+      if (mode === "detached") {
+        spawnFlusher(cwd, sessionName, getDetectedHost());
+      } else {
+        // inline (default)
+        await drainInline(config, sessionName, cwd).catch(() => {});
+      }
+    }
 
     logHook("stop", `Assistant response saved`);
     visStopMessage("out", `saved response (${lastMessage.length} chars)`);

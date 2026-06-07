@@ -1,7 +1,7 @@
 import { Honcho } from "@honcho-ai/sdk";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin } from "../config.js";
+import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getWriteMode, getDetectedHost } from "../config.js";
 import { buildScopedContext } from "../context-builder.js";
 import {
   getCachedUserContext,
@@ -14,7 +14,9 @@ import {
   markKnowledgeGraphRefreshed,
   getInstanceIdForCwd,
   queueMessage,
+  spawnFlusher,
 } from "../cache.js";
+import { drainInline } from "../flush.js";
 import { logHook, logApiCall, logCache, setLogContext } from "../log.js";
 import { visContextLine, visSkipMessage, addSystemMessage, verboseApiResult, verboseList } from "../visual.js";
 import { honchoSessionUrl } from "../styles.js";
@@ -136,6 +138,13 @@ export async function handleUserPrompt(): Promise<void> {
   // Queue user prompt for upload at session-end (instant, no network)
   if (config.saveMessages !== false) {
     queueMessage(prompt, config.peerName, cwd, instanceId || undefined);
+    const mode = getWriteMode(config);
+    if (mode === "detached") {
+      spawnFlusher(cwd, sessionName, getDetectedHost());
+    } else if (mode === "inline") {
+      await drainInline(config, sessionName, cwd).catch(() => {});
+    }
+    // deferred: do nothing (legacy — waits for SessionEnd)
   }
 
   // Track message count for threshold-based refresh
