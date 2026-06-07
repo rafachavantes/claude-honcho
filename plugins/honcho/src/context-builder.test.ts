@@ -32,8 +32,14 @@ test("session scope uses session.context with limitToSession + perspective", asy
 
 test("session scope WITHOUT searchQuery omits representationOptions to avoid bleed", async () => {
   const calls: any[] = [];
-  await buildScopedContext(fakeHoncho(calls), { contextScope: "session", peerName: "rafa", aiPeer: "assistant", observationMode: "unified" } as any, { sessionName: "s", maxConclusions: 12 });
+  const r = await buildScopedContext(fakeHoncho(calls), { contextScope: "session", peerName: "rafa", aiPeer: "assistant", observationMode: "unified" } as any, { sessionName: "s", maxConclusions: 12 });
   expect(calls[0].o.representationOptions).toBeUndefined();
   expect(calls[0].o.limitToSession).toBeUndefined();
   expect(calls[0].o.peerPerspective).toBeUndefined();
+  // Without searchQuery the representation cannot be scoped → must NOT be surfaced
+  // (peerTarget alone returns the GLOBAL representation = cross-project bleed).
+  // summary + peerCard are still returned.
+  expect(r.representation).toBeNull();
+  expect(r.summary).toBe("SUM");
+  expect(r.peerCard).toEqual(["card"]);
 });

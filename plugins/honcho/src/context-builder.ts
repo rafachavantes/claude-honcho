@@ -66,7 +66,11 @@ export async function buildScopedContext(
       : (rawSummary?.content ?? null);
 
   return {
-    representation: ctx.peerRepresentation ?? null,
+    // Without a searchQuery, limitToSession is ignored by the API and peerTarget
+    // would return the GLOBAL representation (cross-project bleed). Only surface the
+    // representation when it was actually scoped (searchQuery present). peerCard
+    // (person-level, global by design) and the session summary are always safe.
+    representation: searchQuery ? (ctx.peerRepresentation ?? null) : null,
     peerCard: ctx.peerCard ?? null,
     summary,
   };
