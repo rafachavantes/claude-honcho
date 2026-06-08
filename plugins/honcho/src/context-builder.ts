@@ -41,22 +41,24 @@ export async function buildScopedContext(
   const session = await honcho.session(sessionName);
   const peerPerspective = observationMode === "unified" ? undefined : config.aiPeer;
 
+  // Honcho BACKEND bug: `limit_to_session` does NOT scope the semantic / most-derived
+  // branches of the representation — only the `recent` branch applies the session
+  // filter (plastic-labs/honcho src/crud/representation.py). With a searchQuery the
+  // representation is dominated by the (unfiltered) semantic branch, so limit_to_session
+  // is effectively a no-op and cross-session conclusions leak. See
+  // docs/honcho-upstream-issue-limit-to-session.md in the honcho-install workspace.
+  //
+  // Until the backend filters all branches, we deliberately DO NOT surface session
+  // conclusions at all. What IS correctly scoped and safe to inject:
+  //   - summary  → truly session-scoped (the session's own summary)
+  //   - peerCard → person-level, global by design (identity, not project work)
+  // When the backend is fixed, re-add `limitToSession: true` + `representationOptions`
+  // ({ searchQuery, searchTopK, searchMaxDistance, maxConclusions, includeMostFrequent })
+  // here and return `ctx.peerRepresentation`.
   const ctx = await session.context({
     summary: opts.summary ?? true,
     peerTarget: config.peerName,
     ...(peerPerspective ? { peerPerspective } : {}),
-    ...(searchQuery
-      ? {
-          limitToSession: true,
-          representationOptions: {
-            searchQuery,
-            searchTopK: 5,
-            searchMaxDistance: 0.7,
-            maxConclusions,
-            includeMostFrequent: true,
-          },
-        }
-      : {}),
   });
 
   const rawSummary = ctx.summary;
@@ -66,11 +68,7 @@ export async function buildScopedContext(
       : (rawSummary?.content ?? null);
 
   return {
-    // Without a searchQuery, limitToSession is ignored by the API and peerTarget
-    // would return the GLOBAL representation (cross-project bleed). Only surface the
-    // representation when it was actually scoped (searchQuery present). peerCard
-    // (person-level, global by design) and the session summary are always safe.
-    representation: searchQuery ? (ctx.peerRepresentation ?? null) : null,
+    representation: null, // intentionally dropped — backend cannot scope conclusions (see note above)
     peerCard: ctx.peerCard ?? null,
     summary,
   };

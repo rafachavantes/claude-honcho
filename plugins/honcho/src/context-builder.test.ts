@@ -18,27 +18,30 @@ test("global scope uses peer.context", async () => {
   expect(r.summary).toBeNull();
 });
 
-test("session scope uses session.context with limitToSession + perspective", async () => {
+test("session scope uses session.context with summary + perspective (directional)", async () => {
   const calls: any[] = [];
   const r = await buildScopedContext(fakeHoncho(calls), { contextScope: "session", peerName: "rafa", aiPeer: "assistant", observationMode: "directional" } as any, { sessionName: "s", searchQuery: "q", maxConclusions: 12 });
   expect(calls[0].kind).toBe("session.context");
-  expect(calls[0].o.limitToSession).toBe(true);
+  expect(calls[0].o.summary).toBe(true);
   expect(calls[0].o.peerTarget).toBe("rafa");
   expect(calls[0].o.peerPerspective).toBe("assistant");
-  expect(calls[0].o.representationOptions.searchQuery).toBe("q");
-  expect(r.representation).toBe("SCOPED");
+  // Backend limit_to_session is a no-op for the semantic/most-derived branches,
+  // so we never ask it to scope the representation and never surface conclusions.
+  expect(calls[0].o.limitToSession).toBeUndefined();
+  expect(calls[0].o.representationOptions).toBeUndefined();
+  // representation is always dropped in session scope (backend cannot scope conclusions);
+  // summary (session-scoped) + peerCard (global) are kept.
+  expect(r.representation).toBeNull();
   expect(r.summary).toBe("SUM");
+  expect(r.peerCard).toEqual(["card"]);
 });
 
-test("session scope WITHOUT searchQuery omits representationOptions to avoid bleed", async () => {
+test("session scope drops representation even WITH a searchQuery (backend cannot scope it)", async () => {
   const calls: any[] = [];
-  const r = await buildScopedContext(fakeHoncho(calls), { contextScope: "session", peerName: "rafa", aiPeer: "assistant", observationMode: "unified" } as any, { sessionName: "s", maxConclusions: 12 });
+  const r = await buildScopedContext(fakeHoncho(calls), { contextScope: "session", peerName: "rafa", aiPeer: "assistant", observationMode: "unified" } as any, { sessionName: "s", searchQuery: "anything", maxConclusions: 12 });
   expect(calls[0].o.representationOptions).toBeUndefined();
   expect(calls[0].o.limitToSession).toBeUndefined();
-  expect(calls[0].o.peerPerspective).toBeUndefined();
-  // Without searchQuery the representation cannot be scoped → must NOT be surfaced
-  // (peerTarget alone returns the GLOBAL representation = cross-project bleed).
-  // summary + peerCard are still returned.
+  expect(calls[0].o.peerPerspective).toBeUndefined(); // unified
   expect(r.representation).toBeNull();
   expect(r.summary).toBe("SUM");
   expect(r.peerCard).toEqual(["card"]);
