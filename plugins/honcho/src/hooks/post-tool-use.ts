@@ -220,16 +220,18 @@ export async function handlePostToolUse(): Promise<void> {
 
   const summary = formatToolSummary(toolName, toolInput, toolResponse);
   logHook("post-tool-use", summary, { tool: toolName });
-  visCapture(summary);
 
-  // INSTANT: Update local claude context file (~2ms)
+  // INSTANT: Update local claude context file (~2ms) — kept even when capture is off.
   appendClaudeWork(summary);
 
-  // captureToolCalls=false skips the Honcho upload (avoids noise + per-tool latency)
-  // while still keeping the instant local context file above.
+  // captureToolCalls=false skips the Honcho upload AND the inline "captured" indicator
+  // (avoids noise + per-tool latency) while still keeping the instant local context file above.
   if (!shouldCaptureToolCalls(config)) {
     process.exit(0);
   }
+
+  // Inline indicator shown to the user — only when we actually capture to Honcho.
+  visCapture(summary);
 
   // Upload to Honcho and wait for completion
   await logToHonchoAsync(config, cwd, summary).catch((e) => logHook("post-tool-use", `Upload failed: ${e}`, { error: String(e) }));

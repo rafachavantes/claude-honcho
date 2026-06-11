@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin } from "../config.js";
+import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, shouldCaptureToolCalls } from "../config.js";
 import { existsSync, readFileSync } from "fs";
 import {
   getQueuedMessages,
@@ -70,7 +70,20 @@ function isMeaningfulAssistantContent(content: string): boolean {
   return content.length >= 200;
 }
 
-function parseTranscript(transcriptPath: string): Array<{ role: string; content: string; isMeaningful?: boolean; timestamp?: string }> {
+/**
+ * Build the stored content for an assistant turn.
+ * When captureToolCalls is true (upstream default), short turns that used tools
+ * get a `[Used tools: ...]` marker appended. When false, the marker is omitted
+ * so no tool-usage noise reaches Honcho.
+ */
+export function formatAssistantContent(textBlocks: string, toolUses: string[], captureToolCalls: boolean): string {
+  if (captureToolCalls && toolUses.length > 0 && textBlocks.length < 100) {
+    return textBlocks + (textBlocks ? "\n" : "") + `[Used tools: ${toolUses.join(", ")}]`;
+  }
+  return textBlocks;
+}
+
+function parseTranscript(transcriptPath: string, captureToolCalls: boolean): Array<{ role: string; content: string; isMeaningful?: boolean; timestamp?: string }> {
   const messages: Array<{ role: string; content: string; isMeaningful?: boolean; timestamp?: string }> = [];
 
   if (!transcriptPath || !existsSync(transcriptPath)) {
@@ -114,11 +127,7 @@ function parseTranscript(transcriptPath: string): Array<{ role: string; content:
               .map((p: any) => p.name)
               .filter(Boolean);
 
-            assistantContent = textBlocks;
-
-            if (toolUses.length > 0 && textBlocks.length < 100) {
-              assistantContent = textBlocks + (textBlocks ? "\n" : "") + `[Used tools: ${toolUses.join(", ")}]`;
-            }
+            assistantContent = formatAssistantContent(textBlocks, toolUses, captureToolCalls);
           }
 
           if (assistantContent && assistantContent.trim()) {
@@ -207,7 +216,7 @@ export async function handleSessionEnd(): Promise<void> {
   // =========================================================
   // Phase 1: LOCAL WORK (instant, survives any cancellation)
   // =========================================================
-  const transcriptMessages = transcriptPath ? parseTranscript(transcriptPath) : [];
+  const transcriptMessages = transcriptPath ? parseTranscript(transcriptPath, shouldCaptureToolCalls(config)) : [];
   const allAssistant = transcriptMessages.filter((msg) => msg.role === "assistant");
   const meaningful = allAssistant.filter((msg) => msg.isMeaningful);
   const other = allAssistant.filter((msg) => !msg.isMeaningful);
