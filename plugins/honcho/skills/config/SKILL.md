@@ -209,7 +209,7 @@ AskUserQuestion:
     - label: "off"
       description: "Inject nothing after compaction"
     - label: "full"
-      description: "Re-inject the full memory package (pre-0.3 behavior; can re-inflate context)"
+      description: "Re-inject the full memory package (legacy behavior; can re-inflate context)"
 ```
 
 Call `set_config` with field `injectOnCompact`.
