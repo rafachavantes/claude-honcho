@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode } from "../config.js";
+import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode, getInjectOnCompact } from "../config.js";
 import { buildScopedContext } from "../context-builder.js";
 import {
   setCachedUserContext,
@@ -9,6 +9,8 @@ import {
   getCachedGitState,
   setCachedGitState,
   detectGitChanges,
+  setPostCompactFlag,
+  clearPostCompactFlag,
 } from "../cache.js";
 import { Spinner } from "../spinner.js";
 import { setMemoryState, setSessionLink } from "../state.js";
@@ -16,6 +18,7 @@ import { honchoSessionUrl } from "../styles.js";
 import { captureGitState, getRecentCommits, isGitRepo, inferFeatureContext } from "../git.js";
 import { logHook, logApiCall, logCache, logFlow, logAsync, setLogContext } from "../log.js";
 import { verboseApiResult, verboseList, clearVerboseLog } from "../visual.js";
+import { decideInjection } from "../injection-policy.js";
 
 
 interface HookInput {
@@ -60,6 +63,20 @@ export async function handleSessionStart(): Promise<void> {
   // Set log context early so all logs include cwd/session
   const sessionName = getSessionName(cwd, claudeInstanceId);
   setLogContext(cwd, sessionName);
+
+  // Source-aware injection: a post-compact start must not refill the context
+  // window the host just freed. Set a one-shot flag for user-prompt and skip
+  // the context-cache warm + dialectic queries entirely.
+  const injectOnCompact = getInjectOnCompact(config);
+  if (decideInjection(hookInput.source, injectOnCompact) !== "full") {
+    setPostCompactFlag(cwd, claudeInstanceId);
+    logHook("session-start", `Post-compact start: skipped context warm (injectOnCompact=${injectOnCompact})`);
+    process.exit(0);
+  }
+  // Any other start discards a stale flag left by a crashed/abandoned session
+  if (hookInput.source !== "compact") {
+    clearPostCompactFlag(cwd);
+  }
 
   // Clear verbose log for fresh session
   clearVerboseLog();
