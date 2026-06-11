@@ -123,7 +123,7 @@ interface ContextCache {
   summaries?: { data: any; fetchedAt: number };
   messageCount?: number; // Track messages since last refresh
   lastRefreshMessageCount?: number; // Message count at last knowledge graph refresh
-  postCompact?: Record<string, { instanceId?: string; at: number }>; // cwd -> pending post-compact flag
+  postCompact?: Record<string, { instanceId?: string; at: number }>; // cwd -> pending post-compact flag (`at` is diagnostic only)
 }
 
 // These are now configurable via config.json, with defaults in getContextRefreshConfig()
