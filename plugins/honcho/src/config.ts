@@ -1,7 +1,7 @@
 import { homedir } from "os";
 import { join, basename } from "path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { captureGitState } from "./git.js";
+import { captureGitState, getRepoRoot, getWorktreeRoot } from "./git.js";
 import { getInstanceIdForCwd, getClaudeInstanceId } from "./cache.js";
 import type { InjectOnCompact } from "./injection-policy.js";
 export type { InjectOnCompact } from "./injection-policy.js";
@@ -603,10 +603,18 @@ export function getSessionName(cwd: string, instanceId?: string): string {
   const config = loadConfig();
   const strategy = config?.sessionStrategy ?? "per-directory";
 
+  // Session identity follows the repo, not the raw cwd: hooks receive whatever
+  // directory the host CLI was in (launch dir, subdir after a cd, or a linked
+  // worktree), and naming off that splits one repo's memory across sessions.
+  // Everything inside a repo — any subdirectory, any worktree — resolves to
+  // the main repo root. Non-git directories keep the raw cwd.
+  const root = getRepoRoot(cwd) ?? cwd;
+
   // Manual overrides only apply to per-directory strategy.
   // For chat-instance and git-branch, the session name is always derived dynamically.
   if (strategy === "per-directory") {
-    const configuredSession = getSessionForPath(cwd);
+    // Raw cwd first so pre-existing overrides keyed on a subdir keep working.
+    const configuredSession = getSessionForPath(cwd) || getSessionForPath(root);
     if (configuredSession) {
       return configuredSession;
     }
@@ -614,12 +622,14 @@ export function getSessionName(cwd: string, instanceId?: string): string {
 
   const usePrefix = config?.sessionPeerPrefix !== false; // default true
   const peerPart = config?.peerName ? sanitizeForSessionName(config.peerName) : "user";
-  const repoPart = sanitizeForSessionName(basename(cwd));
+  const repoPart = sanitizeForSessionName(basename(root));
   const base = usePrefix ? `${peerPart}-${repoPart}` : repoPart;
 
   switch (strategy) {
     case "git-branch": {
-      const gitState = captureGitState(cwd);
+      // Branch comes from the current worktree (a linked worktree has its own
+      // HEAD); only the base name is unified on the main repo root.
+      const gitState = captureGitState(getWorktreeRoot(cwd) ?? cwd);
       if (gitState) {
         const branchPart = sanitizeForSessionName(gitState.branch);
         return `${base}-${branchPart}`;

@@ -2,6 +2,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } from "fs";
 import { getContextRefreshConfig, getLocalContextConfig } from "./config.js";
+import { getRepoRoot } from "./git.js";
 
 const CACHE_DIR = join(homedir(), ".honcho");
 const ID_CACHE_FILE = join(CACHE_DIR, "cache.json");
@@ -251,18 +252,26 @@ export function resetMessageCount(): void {
 // consumed by the next user-prompt to downgrade injection
 // ============================================
 
+// Flags are keyed on the repo root: the host CLI may hand SessionStart and
+// UserPromptSubmit different directories of the same repo (launch dir vs
+// post-cd cwd), and a raw-cwd key would leave the flag unconsumed.
+function postCompactKey(cwd: string): string {
+  return getRepoRoot(cwd) ?? cwd;
+}
+
 export function setPostCompactFlag(cwd: string, instanceId?: string): void {
   const cache = loadContextCache();
   if (!cache.postCompact) cache.postCompact = {};
-  cache.postCompact[cwd] = { instanceId, at: Date.now() };
+  cache.postCompact[postCompactKey(cwd)] = { instanceId, at: Date.now() };
   saveContextCache(cache);
 }
 
 /** Remove any pending flag for this cwd (e.g. on a fresh non-compact start). */
 export function clearPostCompactFlag(cwd: string): void {
   const cache = loadContextCache();
-  if (!cache.postCompact?.[cwd]) return;
-  delete cache.postCompact[cwd];
+  const key = postCompactKey(cwd);
+  if (!cache.postCompact?.[key]) return;
+  delete cache.postCompact[key];
   saveContextCache(cache);
 }
 
@@ -273,10 +282,11 @@ export function clearPostCompactFlag(cwd: string): void {
  */
 export function consumePostCompactFlag(cwd: string, instanceId?: string): boolean {
   const cache = loadContextCache();
-  const entry = cache.postCompact?.[cwd];
+  const key = postCompactKey(cwd);
+  const entry = cache.postCompact?.[key];
   if (!entry) return false;
   if (entry.instanceId && instanceId && entry.instanceId !== instanceId) return false;
-  delete cache.postCompact![cwd];
+  delete cache.postCompact![key];
   saveContextCache(cache);
   return true;
 }

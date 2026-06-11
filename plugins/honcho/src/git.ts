@@ -7,7 +7,7 @@
 
 import { execSync } from "child_process";
 import { existsSync } from "fs";
-import { join } from "path";
+import { basename, dirname, join } from "path";
 import type { GitState, GitFeatureContext } from "./cache.js";
 
 /**
@@ -26,6 +26,47 @@ function gitCommand(cwd: string, args: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Memoized per process — hooks are one-shot processes, but getSessionName can
+// run several times within one and each resolution costs two git execs.
+const repoRootCache = new Map<string, { worktree: string | null; main: string | null }>();
+
+function resolveRoots(cwd: string): { worktree: string | null; main: string | null } {
+  const cached = repoRootCache.get(cwd);
+  if (cached) return cached;
+
+  const worktree = gitCommand(cwd, "rev-parse --show-toplevel");
+  let main: string | null = worktree;
+  if (worktree) {
+    // The common dir is the main worktree's .git for linked worktrees too,
+    // so its parent unifies all branch checkouts of one repo.
+    const commonDir = gitCommand(cwd, "rev-parse --path-format=absolute --git-common-dir");
+    if (commonDir && basename(commonDir) === ".git") {
+      main = dirname(commonDir);
+    }
+  }
+
+  const result = { worktree, main };
+  repoRootCache.set(cwd, result);
+  return result;
+}
+
+/**
+ * Root of the current git worktree (`--show-toplevel`), or null outside a
+ * repo. Works from any subdirectory, unlike isGitRepo's `.git` check.
+ */
+export function getWorktreeRoot(cwd: string): string | null {
+  return resolveRoots(cwd).worktree;
+}
+
+/**
+ * Canonical repo root for session identity: the main worktree's root, so
+ * subdirectories and linked worktrees (per-branch checkouts) of one repo all
+ * resolve to the same path. Null outside a git repo.
+ */
+export function getRepoRoot(cwd: string): string | null {
+  return resolveRoots(cwd).main;
 }
 
 /**
