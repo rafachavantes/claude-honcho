@@ -55,6 +55,8 @@ AskUserQuestion:
       description: "Token limits, summarization settings"
     - label: "Statusline"
       description: "Memory statusLine visibility — on / off (currently: {resolved.statusline})"
+    - label: "Compaction"
+      description: "Post-compact injection + pre-compact anchor (currently: {resolved.injectOnCompact} / anchor {resolved.preCompactAnchor})"
 ```
 
 Always include current values in the description so the user can see what's set.
@@ -179,6 +181,40 @@ AskUserQuestion:
 ```
 
 Call `set_config` with field `statusline` and the chosen value. Takes effect on the next statusLine repaint.
+
+### Compaction
+
+Use `AskUserQuestion` to pick which setting to change:
+
+```
+AskUserQuestion:
+  question: "Which compaction setting?"
+  header: "Compaction"
+  options:
+    - label: "Inject on compact"
+      description: "Memory re-injection after compaction — currently {resolved.injectOnCompact} (default: slim)"
+    - label: "Pre-compact anchor"
+      description: "Memory anchor before compaction — currently {resolved.preCompactAnchor} (default: false)"
+```
+
+For "Inject on compact", offer the three modes:
+
+```
+AskUserQuestion:
+  question: "Injection behavior after compaction?"
+  header: "Mode"
+  options:
+    - label: "slim (Recommended)"
+      description: "One-line pointer only — the host's compaction summary carries recent context"
+    - label: "off"
+      description: "Inject nothing after compaction"
+    - label: "full"
+      description: "Re-inject the full memory package (legacy behavior; can re-inflate context)"
+```
+
+Call `set_config` with field `injectOnCompact`.
+
+For "Pre-compact anchor", offer on/off and call `set_config` with field `preCompactAnchor` (boolean). Explain that `true` restores the HONCHO MEMORY ANCHOR injection + 2 dialectic calls before each compaction.
 
 ### Message upload
 

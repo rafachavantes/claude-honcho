@@ -26,6 +26,9 @@ import {
   type StatuslineMode,
   getObservationMode,
   getContextScope,
+  getInjectOnCompact,
+  getPreCompactAnchor,
+  type InjectOnCompact,
 } from "../config.js";
 import { buildScopedContext } from "../context-builder.js";
 import { honchoSessionUrl } from "../styles.js";
@@ -50,6 +53,7 @@ const ENV_SHADOW_MAP: Record<string, string> = {
   saveMessages: "HONCHO_SAVE_MESSAGES",
   "endpoint.baseUrl": "HONCHO_ENDPOINT",
   "endpoint.environment": "HONCHO_ENDPOINT",
+  injectOnCompact: "HONCHO_INJECT_ON_COMPACT",
 };
 
 // Fields that require confirm=true to change
@@ -106,6 +110,8 @@ function handleGetConfig(cwd: string) {
     globalOverride,
     sessionStrategy: cfg.sessionStrategy ?? "per-directory",
     sessionPeerPrefix: cfg.sessionPeerPrefix !== false,
+    injectOnCompact: getInjectOnCompact(cfg),
+    preCompactAnchor: getPreCompactAnchor(cfg),
     sessions: cfg.sessions ?? {},
     messageUpload: cfg.messageUpload ?? {},
     contextRefresh: cfg.contextRefresh ?? {},
@@ -433,6 +439,24 @@ function handleSetConfig(args: Record<string, unknown>) {
       cfg.observationMode = String(value) as ObservationMode;
       break;
 
+    case "injectOnCompact": {
+      const mode = String(value);
+      if (mode !== "full" && mode !== "slim" && mode !== "off") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "injectOnCompact must be one of: full, slim, off" }, null, 2) }],
+          isError: true,
+        };
+      }
+      previousValue = cfg.injectOnCompact ?? "slim";
+      cfg.injectOnCompact = mode as InjectOnCompact;
+      break;
+    }
+
+    case "preCompactAnchor":
+      previousValue = cfg.preCompactAnchor ?? false;
+      cfg.preCompactAnchor = Boolean(value);
+      break;
+
     case "statusline": {
       const mode = String(value).toLowerCase();
       if (mode !== "on" && mode !== "off") {
@@ -507,6 +531,8 @@ function handleSetConfig(args: Record<string, unknown>) {
     endpoint: endpointInfo,
     sessionStrategy: cfg.sessionStrategy ?? "per-directory",
     sessionPeerPrefix: cfg.sessionPeerPrefix !== false,
+    injectOnCompact: getInjectOnCompact(cfg),
+    preCompactAnchor: getPreCompactAnchor(cfg),
     sessions: cfg.sessions ?? {},
     messageUpload: cfg.messageUpload ?? {},
     contextRefresh: cfg.contextRefresh ?? {},
@@ -724,6 +750,8 @@ export async function runMcpServer(): Promise<void> {
                   "contextRefresh.skipDialectic",
                   "reasoningLevel",
                   "observationMode",
+                  "injectOnCompact",
+                  "preCompactAnchor",
                   "localContext.maxEntries",
                   "sessions.set",
                   "sessions.remove",

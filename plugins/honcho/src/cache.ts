@@ -123,6 +123,7 @@ interface ContextCache {
   summaries?: { data: any; fetchedAt: number };
   messageCount?: number; // Track messages since last refresh
   lastRefreshMessageCount?: number; // Message count at last knowledge graph refresh
+  postCompact?: Record<string, { instanceId?: string; at: number }>; // cwd -> pending post-compact flag (`at` is diagnostic only)
 }
 
 // These are now configurable via config.json, with defaults in getContextRefreshConfig()
@@ -138,7 +139,7 @@ function getMessageRefreshThreshold(): number {
 
 // Known keys in ContextCache — anything else is a ghost from older versions
 const CONTEXT_CACHE_KNOWN_KEYS = new Set([
-  "userContext", "claudeContext", "summaries", "messageCount", "lastRefreshMessageCount",
+  "userContext", "claudeContext", "summaries", "messageCount", "lastRefreshMessageCount", "postCompact",
 ]);
 
 export function loadContextCache(): ContextCache {
@@ -243,6 +244,41 @@ export function resetMessageCount(): void {
   cache.messageCount = 0;
   cache.lastRefreshMessageCount = 0;
   saveContextCache(cache);
+}
+
+// ============================================
+// Post-Compact Flag — set by session-start (source=compact),
+// consumed by the next user-prompt to downgrade injection
+// ============================================
+
+export function setPostCompactFlag(cwd: string, instanceId?: string): void {
+  const cache = loadContextCache();
+  if (!cache.postCompact) cache.postCompact = {};
+  cache.postCompact[cwd] = { instanceId, at: Date.now() };
+  saveContextCache(cache);
+}
+
+/** Remove any pending flag for this cwd (e.g. on a fresh non-compact start). */
+export function clearPostCompactFlag(cwd: string): void {
+  const cache = loadContextCache();
+  if (!cache.postCompact?.[cwd]) return;
+  delete cache.postCompact[cwd];
+  saveContextCache(cache);
+}
+
+/**
+ * Check-and-clear. Matches when the stored flag belongs to this instance, or
+ * when either side has no instance id (single-session case). A flag owned by
+ * a different instance is left untouched for that session to consume.
+ */
+export function consumePostCompactFlag(cwd: string, instanceId?: string): boolean {
+  const cache = loadContextCache();
+  const entry = cache.postCompact?.[cwd];
+  if (!entry) return false;
+  if (entry.instanceId && instanceId && entry.instanceId !== instanceId) return false;
+  delete cache.postCompact![cwd];
+  saveContextCache(cache);
+  return true;
 }
 
 // ============================================

@@ -230,6 +230,8 @@ All configuration lives in a single global file at `~/.honcho/config.json`. You 
     "ttlSeconds": 300,                // Cache TTL for context
     "skipDialectic": false            // Skip dialectic chat() calls in user-prompt hook
   },
+  "injectOnCompact": "slim",          // After compaction: "slim" (one-line pointer, default) | "off" | "full"
+  "preCompactAnchor": false,          // Inject memory anchor + dialectic before compaction (default: false)
 
   // Observation mode
   "observationMode": "unified",       // "unified" (default) | "directional"
@@ -422,8 +424,9 @@ Environment variables work for initial bootstrap (before a config file exists). 
 | `HONCHO_HOST`          | No       | auto-detected | Force host detection: `claude_code`, `cursor`, or `obsidian`      |
 | `HONCHO_ENDPOINT`      | No       | `production`  | `production`, `local`, or a full URL                              |
 | `HONCHO_ENABLED`       | No       | `true`        | Set to `false` to disable                                         |
-| `HONCHO_SAVE_MESSAGES` | No       | `true`        | Set to `false` to stop saving messages                            |
-| `HONCHO_LOGGING`       | No       | `true`        | Set to `false` to disable file logging to `~/.honcho/`            |
+| `HONCHO_SAVE_MESSAGES`      | No       | `true`        | Set to `false` to stop saving messages                            |
+| `HONCHO_INJECT_ON_COMPACT`  | No       | `slim`        | After compaction injection: `slim` (one-line pointer) \| `off` \| `full` |
+| `HONCHO_LOGGING`            | No       | `true`        | Set to `false` to disable file logging to `~/.honcho/`            |
 
 ## How It Works
 
