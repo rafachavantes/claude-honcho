@@ -1,5 +1,9 @@
-import { test, expect } from "bun:test";
+import { test, expect, afterEach } from "bun:test";
 import { getContextScope, getWriteMode, shouldCaptureToolCalls, getInjectOnCompact, getPreCompactAnchor } from "./config.js";
+
+afterEach(() => {
+  delete process.env.HONCHO_INJECT_ON_COMPACT;
+});
 
 test("defaults preserve upstream behavior", () => {
   expect(getContextScope({} as any)).toBe("global");
@@ -30,5 +34,6 @@ test("HONCHO_INJECT_ON_COMPACT env overrides config; invalid values are ignored"
   expect(getInjectOnCompact({ injectOnCompact: "full" } as any)).toBe("off");
   process.env.HONCHO_INJECT_ON_COMPACT = "bogus";
   expect(getInjectOnCompact({ injectOnCompact: "full" } as any)).toBe("full");
+  expect(getInjectOnCompact({} as any)).toBe("slim");
   delete process.env.HONCHO_INJECT_ON_COMPACT;
 });

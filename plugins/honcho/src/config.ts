@@ -789,7 +789,7 @@ export function getContextScope(config: HonchoCLAUDEConfig): ContextScope { retu
 export function getWriteMode(config: HonchoCLAUDEConfig): WriteMode { return config.writeMode ?? "inline"; }
 export function shouldCaptureToolCalls(config: HonchoCLAUDEConfig): boolean { return config.captureToolCalls ?? true; }
 
-const VALID_INJECT_ON_COMPACT = new Set<string>(["full", "slim", "off"]);
+const VALID_INJECT_ON_COMPACT = new Set<string>(["full", "slim", "off"] satisfies InjectOnCompact[]);
 
 /** Post-compaction injection mode. Priority: env > config (host > root) > "slim". */
 export function getInjectOnCompact(config: HonchoCLAUDEConfig): InjectOnCompact {
