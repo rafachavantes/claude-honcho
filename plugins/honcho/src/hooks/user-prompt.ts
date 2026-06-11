@@ -1,7 +1,7 @@
 import { Honcho } from "@honcho-ai/sdk";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getWriteMode, getDetectedHost } from "../config.js";
+import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getWriteMode, getDetectedHost, getInjectOnCompact } from "../config.js";
 import { buildScopedContext } from "../context-builder.js";
 import {
   getCachedUserContext,
@@ -15,8 +15,10 @@ import {
   getInstanceIdForCwd,
   queueMessage,
   spawnFlusher,
+  consumePostCompactFlag,
 } from "../cache.js";
 import { drainInline } from "../flush.js";
+import { SLIM_POINTER } from "../injection-policy.js";
 import { logHook, logApiCall, logCache, setLogContext } from "../log.js";
 import { visContextLine, visSkipMessage, addSystemMessage, verboseApiResult, verboseList } from "../visual.js";
 import { honchoSessionUrl } from "../styles.js";
@@ -178,6 +180,28 @@ export async function handleUserPrompt(): Promise<void> {
     logHook("user-prompt", "Skipping context (trivial prompt)");
     visSkipMessage("user-prompt", sessionLink ? `${sessionLink} · trivial prompt` : "trivial prompt");
     process.exit(0);
+  }
+
+  // Post-compact downgrade: the host's compaction summary already carries
+  // recent context, so inject at most a slim pointer instead of the full
+  // cached package. The flag is one-shot — normal TTL/threshold cadence
+  // resumes on the next prompt. (Placed after the trivial-prompt skip so a
+  // "y"/"ok" first prompt doesn't burn the flag without an injection.)
+  if (consumePostCompactFlag(cwd, instanceId || undefined)) {
+    const mode = getInjectOnCompact(config);
+    if (mode !== "full") {
+      if (mode === "slim") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: `[Honcho Memory]: ${SLIM_POINTER}`,
+          },
+        }));
+      }
+      logHook("user-prompt", `Post-compact prompt: ${mode} injection`);
+      process.exit(0);
+    }
+    // mode flipped to "full" since the flag was set — fall through to normal injection
   }
 
   // Decide whether to refresh: TTL expired or message threshold hit
