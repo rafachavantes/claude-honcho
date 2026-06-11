@@ -3,6 +3,8 @@ import { join, basename } from "path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { captureGitState } from "./git.js";
 import { getInstanceIdForCwd, getClaudeInstanceId } from "./cache.js";
+import type { InjectOnCompact } from "./injection-policy.js";
+export type { InjectOnCompact } from "./injection-policy.js";
 
 function sanitizeForSessionName(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
@@ -95,6 +97,10 @@ export interface HostConfig {
   writeMode?: WriteMode;
   /** Whether to capture tool calls as observations (default: true) */
   captureToolCalls?: boolean;
+  /** Injection behavior after context compaction (default: "slim") */
+  injectOnCompact?: InjectOnCompact;
+  /** Build the pre-compaction memory anchor + dialectic calls (default: false) */
+  preCompactAnchor?: boolean;
   messageUpload?: MessageUploadConfig;
   contextRefresh?: ContextRefreshConfig;
   localContext?: LocalContextConfig;
@@ -199,6 +205,10 @@ interface HonchoFileConfig {
   writeMode?: WriteMode;
   /** Whether to capture tool calls as observations (default: true) */
   captureToolCalls?: boolean;
+  /** Injection behavior after context compaction (default: "slim") */
+  injectOnCompact?: InjectOnCompact;
+  /** Build the pre-compaction memory anchor + dialectic calls (default: false) */
+  preCompactAnchor?: boolean;
   /** Memory statusLine visibility: "on" (default) · "off" */
   statusline?: StatuslineMode;
   hosts?: Record<string, HostConfig>;
@@ -246,6 +256,10 @@ export interface HonchoCLAUDEConfig {
   writeMode?: WriteMode;
   /** Whether to capture tool calls as observations (default: true) */
   captureToolCalls?: boolean;
+  /** Injection behavior after context compaction (default: "slim") */
+  injectOnCompact?: InjectOnCompact;
+  /** Build the pre-compaction memory anchor + dialectic calls (default: false) */
+  preCompactAnchor?: boolean;
   /** Memory statusLine visibility: "on" (default) · "off" */
   statusline?: StatuslineMode;
   /** Token-based upload limits */
@@ -365,6 +379,8 @@ function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDECon
     contextScope: hostBlock?.contextScope ?? raw.contextScope,
     writeMode: hostBlock?.writeMode ?? raw.writeMode,
     captureToolCalls: hostBlock?.captureToolCalls ?? raw.captureToolCalls,
+    injectOnCompact: hostBlock?.injectOnCompact ?? raw.injectOnCompact,
+    preCompactAnchor: hostBlock?.preCompactAnchor ?? raw.preCompactAnchor,
     messageUpload: hostBlock?.messageUpload ?? raw.messageUpload,
     contextRefresh: hostBlock?.contextRefresh ?? raw.contextRefresh,
     endpoint: hostBlock?.endpoint ?? raw.endpoint,
@@ -523,6 +539,8 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   setHostIfExplicit("contextScope", config.contextScope, existing.contextScope);
   setHostIfExplicit("writeMode", config.writeMode, existing.writeMode);
   setHostIfExplicit("captureToolCalls", config.captureToolCalls, existing.captureToolCalls);
+  setHostIfExplicit("injectOnCompact", config.injectOnCompact, existing.injectOnCompact);
+  setHostIfExplicit("preCompactAnchor", config.preCompactAnchor, existing.preCompactAnchor);
   setHostIfExplicit("messageUpload", config.messageUpload, existing.messageUpload);
   setHostIfExplicit("contextRefresh", config.contextRefresh, existing.contextRefresh);
   setHostIfExplicit("localContext", config.localContext, existing.localContext);
@@ -770,6 +788,20 @@ export function getObservationMode(config: HonchoCLAUDEConfig): ObservationMode 
 export function getContextScope(config: HonchoCLAUDEConfig): ContextScope { return config.contextScope ?? "global"; }
 export function getWriteMode(config: HonchoCLAUDEConfig): WriteMode { return config.writeMode ?? "inline"; }
 export function shouldCaptureToolCalls(config: HonchoCLAUDEConfig): boolean { return config.captureToolCalls ?? true; }
+
+const VALID_INJECT_ON_COMPACT = new Set<string>(["full", "slim", "off"]);
+
+/** Post-compaction injection mode. Priority: env > config (host > root) > "slim". */
+export function getInjectOnCompact(config: HonchoCLAUDEConfig): InjectOnCompact {
+  const env = process.env.HONCHO_INJECT_ON_COMPACT;
+  if (env && VALID_INJECT_ON_COMPACT.has(env)) return env as InjectOnCompact;
+  return config.injectOnCompact ?? "slim";
+}
+
+/** Whether PreCompact builds the memory anchor + dialectic calls (default: false). */
+export function getPreCompactAnchor(config: HonchoCLAUDEConfig): boolean {
+  return config.preCompactAnchor ?? false;
+}
 
 export function setEndpoint(environment?: HonchoEnvironment, baseUrl?: string): void {
   const config = loadConfig();
