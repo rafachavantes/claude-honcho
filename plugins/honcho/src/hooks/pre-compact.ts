@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode } from "../config.js";
+import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, getObservationMode, getPreCompactAnchor } from "../config.js";
 import { Spinner } from "../spinner.js";
 import { setMemoryState } from "../state.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
@@ -115,6 +115,14 @@ export async function handlePreCompact(): Promise<void> {
   setLogContext(cwd, getSessionName(cwd));
 
   logHook("pre-compact", `Compaction triggered (${trigger})`);
+
+  // Memory anchor is opt-in (preCompactAnchor, default false): we rely on the
+  // host CLI's own compaction summary. Message persistence does not happen in
+  // this hook, so skipping is safe. PreCompact must never block compaction.
+  if (!getPreCompactAnchor(config)) {
+    logHook("pre-compact", "Memory anchor skipped (preCompactAnchor=false)");
+    process.exit(0);
+  }
 
   // Show spinner for auto compaction (context window full)
   const spinner = new Spinner({ style: "neural" });
