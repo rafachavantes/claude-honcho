@@ -1,7 +1,7 @@
 {
   "name": "claude-honcho",
-  "version": "0.2.11",
-  "description": "Persistent memory for Claude Code sessions using Honcho by Plastic Labs",
+  "version": "0.2.11.1",
+  "description": "Persistent memory for Claude Code sessions using Honcho (Rafa's fork: repo-root session identity, slim post-compact injection)",
   "type": "module",
   "keywords": [
     "claude",
@@ -12,7 +12,7 @@
     "ai",
     "llm"
   ],
-  "author": "Plastic Labs",
+  "author": "Rafael Chavantes <contato@moara.digital>",
   "license": "MIT",
   "dependencies": {
     "@honcho-ai/sdk": "^2.1.0",

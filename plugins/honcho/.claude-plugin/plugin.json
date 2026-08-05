@@ -1,13 +1,13 @@
 {
   "name": "honcho",
-  "version": "0.2.11",
-  "description": "Persistent memory for Claude Code sessions using Honcho by Plastic Labs",
+  "version": "0.2.11.1",
+  "description": "Persistent memory for Claude Code sessions using Honcho (Rafa's fork: repo-root session identity, slim post-compact injection)",
   "author": {
-    "name": "Plastic Labs",
-    "email": "hello@plasticlabs.ai"
+    "name": "Rafael Chavantes",
+    "email": "contato@moara.digital"
   },
-  "homepage": "https://honcho.dev",
-  "repository": "https://github.com/plastic-labs/claude-honcho",
+  "homepage": "https://github.com/rafachavantes/claude-honcho",
+  "repository": "https://github.com/rafachavantes/claude-honcho",
   "license": "MIT",
   "keywords": ["memory", "context", "ai", "honcho", "persistence"],
   "mcpServers": "./mcp-servers.json",
