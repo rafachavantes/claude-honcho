@@ -749,12 +749,14 @@ export function resolveWorktreeMainRoot(dir: string): string | null {
 // Bound on the .git lookup walk; cwds nested deeper keep per-directory naming.
 const MAX_GIT_WALK_UP = 12;
 
-/** Main repository root when cwd is inside a linked git worktree, else null. */
-export function worktreeMainRootFor(cwd: string): string | null {
+/** Nearest ancestor (including `cwd`) holding a `.git` entry, or null when the
+ *  bounded walk leaves the repository. Shared by the worktree lookup and the
+ *  session-root lookup so both bound the walk identically. */
+function gitDirFor(cwd: string): string | null {
   try {
     let dir = resolve(cwd);
     for (let i = 0; i < MAX_GIT_WALK_UP; i++) {
-      if (existsSync(join(dir, ".git"))) return resolveWorktreeMainRoot(dir);
+      if (existsSync(join(dir, ".git"))) return dir;
       const parent = dirname(dir);
       if (parent === dir) break;
       dir = parent;
@@ -763,6 +765,26 @@ export function worktreeMainRootFor(cwd: string): string | null {
     /* ignore */
   }
   return null;
+}
+
+/** Main repository root when cwd is inside a linked git worktree, else null. */
+export function worktreeMainRootFor(cwd: string): string | null {
+  const dir = gitDirFor(cwd);
+  return dir ? resolveWorktreeMainRoot(dir) : null;
+}
+
+/**
+ * Canonical root for session identity: the repository a path belongs to,
+ * reached either through a linked worktree's pointer file or through a plain
+ * subdirectory of a regular checkout. worktreeMainRootFor covers only the
+ * first case — it returns null for a regular repository by contract — so a
+ * subdirectory would otherwise be named after itself and split one repo's
+ * memory across sessions.
+ */
+export function sessionRootFor(cwd: string): string | null {
+  const dir = gitDirFor(cwd);
+  if (!dir) return null;
+  return resolveWorktreeMainRoot(dir) ?? dir;
 }
 
 export function getSessionForPath(cwd: string, mainRoot?: string | null): string | null {
@@ -813,7 +835,7 @@ export function deriveSessionName(
 export function getSessionName(cwd: string, instanceId?: string): string {
   const config = loadConfig();
   const strategy = config?.sessionStrategy ?? "per-directory";
-  const mainRoot = worktreeMainRootFor(cwd);
+  const mainRoot = sessionRootFor(cwd);
 
   // Manual overrides only apply to per-directory strategy.
   // For chat-instance and git-branch, the session name is always derived dynamically.
@@ -827,7 +849,10 @@ export function getSessionName(cwd: string, instanceId?: string): string {
   // Resolve live env state, then delegate to the pure deriver.
   let branch: string | undefined;
   if (strategy === "git-branch") {
-    branch = captureGitState(cwd)?.branch;
+    // captureGitState gates on isGitRepo(), a bare `.git` existsSync, so it
+    // must run from the directory that actually holds .git — the worktree's
+    // own root, not a subdirectory of it.
+    branch = captureGitState(gitDirFor(cwd) ?? cwd)?.branch;
   }
   let resolvedInstanceId: string | undefined;
   if (strategy === "chat-instance") {
