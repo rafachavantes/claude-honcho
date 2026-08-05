@@ -4,6 +4,8 @@ import { fileURLToPath } from "url";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { captureGitState } from "./git.js";
 import { getInstanceIdForCwd, getClaudeInstanceId } from "./cache.js";
+import type { InjectOnCompact } from "./injection-policy.js";
+export type { InjectOnCompact } from "./injection-policy.js";
 
 function sanitizeForSessionName(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
@@ -199,6 +201,8 @@ export interface HostConfig {
   injection?: InjectionConfig;
   /** Register the on-demand `honcho_remember` MCP tool (default: false). */
   rememberTool?: boolean;
+  /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
+  injectOnCompact?: InjectOnCompact;
 }
 
 let _detectedHost: HonchoHost | null = null;
@@ -320,6 +324,8 @@ interface HonchoFileConfig {
   injection?: InjectionConfig;
   /** Register the on-demand `honcho_remember` MCP tool (default: false). */
   rememberTool?: boolean;
+  /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
+  injectOnCompact?: InjectOnCompact;
   hosts?: Record<string, HostConfig>;
   /** When true, flat workspace/aiPeer fields apply to ALL hosts,
    *  ignoring host-specific blocks. When false (default), each host
@@ -378,6 +384,8 @@ export interface HonchoCLAUDEConfig {
   /** Register the on-demand `honcho_remember` MCP tool (default: false).
    *  Not a hook-injection surface — a deliberate, model-invoked recall tool. */
   rememberTool?: boolean;
+  /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
+  injectOnCompact?: InjectOnCompact;
   /** Temporarily disable plugin (default: true) */
   enabled?: boolean;
   /** Enable file logging to ~/.honcho/ (default: true) */
@@ -516,6 +524,7 @@ function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDECon
     redactPatterns: hostBlock?.redactPatterns ?? raw.redactPatterns,
     injection: hostBlock?.injection ?? raw.injection,
     rememberTool: hostBlock?.rememberTool ?? raw.rememberTool,
+    injectOnCompact: hostBlock?.injectOnCompact ?? raw.injectOnCompact,
     enabled: hostBlock?.enabled ?? raw.enabled,
     logging: hostBlock?.logging ?? raw.logging,
     globalOverride: raw.globalOverride,
@@ -681,6 +690,7 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   setHostIfExplicit("endpoint", config.endpoint, existing.endpoint);
   setHostIfExplicit("injection", config.injection, existing.injection);
   setHostIfExplicit("rememberTool", config.rememberTool, existing.rememberTool);
+  setHostIfExplicit("injectOnCompact", config.injectOnCompact, existing.injectOnCompact);
 
   // Preserve a host-scoped apiKey already on disk. This integration never writes
   // apiKey (config.apiKey is the *resolved* key — env/root — and must not be
@@ -930,6 +940,16 @@ export function getInjectionConfig(config?: HonchoCLAUDEConfig | null): Required
     ? normalizePerTurn(resolved.showContents)
     : DEFAULT_INJECTION.showContents;
   return resolved;
+}
+
+const VALID_INJECT_ON_COMPACT = new Set<string>(["full", "slim", "off"] satisfies InjectOnCompact[]);
+
+/** Post-compaction injection mode. Priority: env > config (host > root) > "full".
+ *  Defaults to "full" so an unconfigured install behaves exactly like upstream. */
+export function getInjectOnCompact(config: HonchoCLAUDEConfig): InjectOnCompact {
+  const env = process.env.HONCHO_INJECT_ON_COMPACT;
+  if (env && VALID_INJECT_ON_COMPACT.has(env)) return env as InjectOnCompact;
+  return config.injectOnCompact ?? "full";
 }
 
 export function isLoggingEnabled(): boolean {
