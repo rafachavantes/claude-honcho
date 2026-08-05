@@ -13,6 +13,13 @@ cd plugins/honcho && bun test              # full suite; must run from the plugi
 bash plugins/honcho/scripts/install-local.sh   # then restart Claude Code
 ```
 
+**Exit gate (keep green)** — the same one CI runs, from `plugins/honcho/`:
+`bunx tsc --noEmit` · `bun test` · `bun run scripts/build.ts` · `bash scripts/smoke.sh .stage` ·
+`claude plugin validate .stage --strict`. Two traps: `tsconfig.json` only includes `src/**`, so
+`tsc` never checks `tests/` or `hooks/`; and `smoke.sh` runs every entry point with the plugin
+**disabled**, so each hook returns before reading stdin — it cannot catch a bundled entry that
+drops the hook payload (that was upstream PR #114).
+
 `install-local.sh` rsyncs the source into `~/.claude/plugins/cache/honcho/honcho/<version>` —
 the only way to exercise hook/MCP changes live, since Claude Code runs the cached copy, not this repo.
 
@@ -37,6 +44,36 @@ the only way to exercise hook/MCP changes live, since Claude Code runs the cache
   and the statusline script renders from it — see `src/state.ts`.
 - **Session identity is the git repo root**, not raw cwd, so subdirs, post-`cd` cwds and worktrees
   map to one Honcho session (`src/git.ts`).
+
+## Workflow (o jeito do Rafa)
+
+Every phase: brainstorm (`superpowers:brainstorming`) → spec → **cold review** → apply findings →
+plan (`superpowers:writing-plans`) → cold review → subagent-driven execution → merge.
+
+**Cold review runs on Codex** — a different model, so it doesn't inherit this session's
+assumptions, and it runs commands against the real repo.
+
+- **Spec and plan gates → `/codex:rescue`.** `/codex:review` and `/codex:adversarial-review` build
+  their target from `git diff` / `git status`, so they can't see files outside the diff (a plan
+  living outside the repo is invisible to them). Only `rescue` reads the filesystem directly.
+- **Code gate → `/codex:adversarial-review`** over the branch diff — it challenges the approach,
+  not just defects.
+- **Write the prompt to demand verification, not opinion:** list the spec's factual claims and tell
+  it to check each against the repo, reporting `file:line`. That is what catches confident,
+  unverified claims — on 2026-08-05 a cold review of the rebase plan caught a lost line that would
+  have left `getWorktreeRoot` exported and dead.
+- **State read-only** in the rescue prompt; `--background` for anything beyond a couple of files,
+  `/codex:status` to follow. Model/effort default from `~/.codex/config.toml`, not the plugin.
+- **Rafa gates:** spec approval is his. Don't self-approve and move on.
+- **Code methodology: ponytail** — does it need to exist? does the codebase already have it?
+  stdlib? platform? existing dep? one line? only then write code. After implementing, run
+  `ponytail-review` to hunt over-engineering. This is what shrank the 2026-08-05 rebase from four
+  fork differentials to two.
+
+## Documentation language
+
+All documentation and code comments are written in **English** — this repo's specs and drafts are
+public and travel upstream as PRs and issues. Conversation with the maintainer may be in Portuguese.
 
 ## No AI attribution in published artifacts (hard rule)
 
