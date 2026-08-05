@@ -1,17 +1,19 @@
 import { Honcho } from "@honcho-ai/sdk";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, type InjectionConfig, type PerTurnComponent } from "../config.js";
+import { loadConfig, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, getInjectOnCompact, type InjectionConfig, type PerTurnComponent } from "../config.js";
 import {
   getMessageCount,
   incrementMessageCount,
   getInstanceIdForCwd,
+  consumePostCompactFlag,
 } from "../cache.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
 import { visInjectionMessage, visDialecticMessage, visSessionContextMessage, visSkipMessage, addSystemMessage, verboseApiResult, verboseList } from "../visual.js";
 import type { ReasoningLevel } from "../config.js";
 import { honchoSessionUrl } from "../styles.js";
 import { setMemoryState, setSessionLink } from "../state.js";
+import { SLIM_POINTER } from "../injection-policy.js";
 
 interface HookInput {
   prompt?: string;
@@ -208,6 +210,28 @@ export async function handleUserPrompt(): Promise<void> {
     logHook("user-prompt", "Skipping context (harness-injected or trivial prompt)");
     visSkipMessage("user-prompt", sessionLink ? `${sessionLink} · skipped` : "skipped");
     process.exit(0);
+  }
+
+  // Post-compact downgrade: the host's compaction summary already carries
+  // recent context, so inject at most a slim pointer instead of the full
+  // per-turn package. The flag is one-shot — normal cadence resumes on the
+  // next prompt. (Placed after the trivial-prompt skip so a "y"/"ok" first
+  // prompt doesn't burn the flag without an injection.)
+  if (consumePostCompactFlag(cwd, instanceId || undefined)) {
+    const mode = getInjectOnCompact(config);
+    if (mode !== "full") {
+      if (mode === "slim") {
+        console.log(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: `[Honcho Memory]: ${SLIM_POINTER}`,
+          },
+        }));
+      }
+      logHook("user-prompt", `Post-compact prompt: ${mode} injection`);
+      process.exit(0);
+    }
+    // mode flipped to "full" since the flag was set — fall through to normal injection
   }
 
   const injection = getInjectionConfig(config);
