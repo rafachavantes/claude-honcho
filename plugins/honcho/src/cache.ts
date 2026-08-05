@@ -1,7 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { getContextRefreshConfig } from "./config.js";
+import { getContextRefreshConfig, sessionRootFor } from "./config.js";
 
 const CACHE_DIR = join(homedir(), ".honcho");
 const ID_CACHE_FILE = join(CACHE_DIR, "cache.json");
@@ -120,6 +120,7 @@ interface ContextCache {
   claudeContext?: { data: any; fetchedAt: number };
   summaries?: { data: any; fetchedAt: number };
   messageCount?: number; // Track messages since last refresh
+  postCompact?: Record<string, { instanceId?: string; at: number }>;
 }
 
 // Now configurable via config.json, with defaults in getContextRefreshConfig()
@@ -130,7 +131,7 @@ function getContextTTL(): number {
 
 // Known keys in ContextCache — anything else is a ghost from older versions
 const CONTEXT_CACHE_KNOWN_KEYS = new Set([
-  "claudeContext", "summaries", "messageCount",
+  "claudeContext", "summaries", "messageCount", "postCompact",
 ]);
 
 export function loadContextCache(): ContextCache {
@@ -196,6 +197,49 @@ export function resetMessageCount(): void {
 }
 
 // ============================================
+// Post-compact flag — set by SessionStart(source=compact),
+// consumed by the next user-prompt to downgrade injection
+// ============================================
+
+// Flags are keyed on the repo root: the host CLI may hand SessionStart and
+// UserPromptSubmit different directories of the same repo (launch dir vs
+// post-cd cwd), and a raw-cwd key would leave the flag unconsumed.
+function postCompactKey(cwd: string): string {
+  return sessionRootFor(cwd) ?? cwd;
+}
+
+export function setPostCompactFlag(cwd: string, instanceId?: string): void {
+  const cache = loadContextCache();
+  if (!cache.postCompact) cache.postCompact = {};
+  cache.postCompact[postCompactKey(cwd)] = { instanceId, at: Date.now() };
+  saveContextCache(cache);
+}
+
+/** Remove any pending flag for this cwd (e.g. on a fresh non-compact start). */
+export function clearPostCompactFlag(cwd: string): void {
+  const cache = loadContextCache();
+  const key = postCompactKey(cwd);
+  if (!cache.postCompact?.[key]) return;
+  delete cache.postCompact[key];
+  saveContextCache(cache);
+}
+
+/**
+ * Read and clear the flag. Returns true only for the instance that set it —
+ * a flag left by another Claude instance in the same directory is ignored so
+ * parallel sessions don't consume each other's downgrade.
+ */
+export function consumePostCompactFlag(cwd: string, instanceId?: string): boolean {
+  const cache = loadContextCache();
+  const key = postCompactKey(cwd);
+  const entry = cache.postCompact?.[key];
+  if (!entry) return false;
+  if (entry.instanceId && instanceId && entry.instanceId !== instanceId) return false;
+  delete cache.postCompact![key];
+  saveContextCache(cache);
+  return true;
+}
+
 // Git State Cache - track git state per directory
 // ============================================
 
