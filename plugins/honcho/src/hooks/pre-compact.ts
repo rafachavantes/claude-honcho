@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode } from "../config.js";
+import { loadConfig, getSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getPreCompactAnchor } from "../config.js";
 import { Spinner } from "../spinner.js";
 import { setMemoryState } from "../state.js";
 import { logHook, logApiCall, setLogContext } from "../log.js";
@@ -97,6 +97,7 @@ export async function handlePreCompact(): Promise<void> {
     process.exit(0);
   }
 
+
   let hookInput: HookInput = {};
   try {
     const input = getCachedStdin() ?? await readStdinText();
@@ -114,6 +115,13 @@ export async function handlePreCompact(): Promise<void> {
   setLogContext(cwd, getSessionName(cwd));
 
   logHook("pre-compact", `Compaction triggered (${trigger})`);
+
+  // Anchor disabled: exit before any network call. This hook is read-only —
+  // messages are persisted by user-prompt/stop — so skipping loses no memory.
+  if (getPreCompactAnchor(config) === "off") {
+    logHook("pre-compact", "Anchor skipped (preCompactAnchor=off)");
+    process.exit(0);
+  }
 
   // Show spinner for auto compaction (context window full)
   const spinner = new Spinner({ style: "neural" });

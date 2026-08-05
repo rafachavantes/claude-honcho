@@ -1,5 +1,8 @@
 export type InjectOnCompact = "full" | "slim" | "off";
 
+/** Whether PreCompact emits the memory anchor at all. */
+export type PreCompactAnchor = "full" | "off";
+
 export const SLIM_POINTER =
   "Honcho memory is active for this session; older details can be recalled via the honcho tools.";
 

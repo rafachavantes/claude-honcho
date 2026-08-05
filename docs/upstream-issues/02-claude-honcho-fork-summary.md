@@ -3,19 +3,20 @@
 > Draft to review before posting to https://github.com/plastic-labs/claude-honcho/issues
 > Target repo: **plastic-labs/claude-honcho** (the Claude Code plugin).
 > Rewritten 2026-08-05 after rebasing the fork onto `ff5f5b7` (0.2.11 + 4 commits).
-> Scope shrank from 4 items to 2 — see "Histórico" at the bottom for what dropped and why.
+> Scope shrank from 4 items to 2, then grew back to 3 when measuring a real compaction
+> surfaced the anchor cost — see "Histórico" at the bottom.
 
 ---
 
-**Title:** Post-compaction re-injection, and session naming for subdirectories — two things I carry in a fork
+**Title:** What compaction costs, and session naming for subdirectories — three things I carry in a fork
 
 **Labels:** enhancement
 
 ---
 
-Hi! I run the plugin daily across several repos, on Claude Code and on a Codex CLI port sharing one workspace. I rebased my fork onto current `main` this week and, in doing so, most of what I'd been carrying either landed upstream or stopped being necessary. Two things survived the rebase, and I'd rather ask than dump PRs on you: **would either of these be welcome?**
+Hi! I run the plugin daily across several repos, on Claude Code and on a Codex CLI port sharing one workspace. I rebased my fork onto current `main` this week and, in doing so, most of what I'd been carrying either landed upstream or stopped being necessary. Two things survived the rebase; a third came out of measuring an actual compaction afterwards. I'd rather ask than dump PRs on you: **would any of these be welcome?**
 
-Both are implemented, tested, and running here daily. Happy to open one focused PR per item.
+All three are implemented, tested, and running here daily. Happy to open one focused PR per item.
 
 ## 1. SessionStart re-injects the full package right after a compaction
 
@@ -40,7 +41,35 @@ What I run:
 
 Three small pieces: a pure policy module (`decideInjection(source, mode)`), the flag in `cache.ts`, and ~20 lines across the two hooks. Tests cover the policy, the flag's one-shot/instance semantics, and the two hook paths.
 
-## 2. `#107` covers worktrees, but not subdirectories of a regular checkout
+## 2. The `PreCompact` anchor is expensive, and most of it doesn't survive
+
+Item 1 is about what goes back in *after* a compaction. This one is about what goes in *before* it — and I only found it by watching a real compaction once item 1 had silenced the noise around it.
+
+`PreCompact` builds the memory anchor from four calls (`context`, `summaries`, and two `peer.chat` dialectics) and prints it with `MUST be preserved in the summary`. Measured on my peer, 2026-08-05:
+
+| Component | Chars | Share |
+|---|---:|---:|
+| dialectic `peer.chat(user)` | 3,206 | 23% |
+| dialectic `peer.chat(assistant)` | 2,814 | 20% |
+| session summary | 3,633 | 26% |
+| conclusions | 2,382 | 17% |
+| `peerCard` | 1,618 | 11% |
+| session identity | 99 | 1% |
+| **total** | **14,122 ≈ 3,500 tokens** | |
+
+Three things stood out:
+
+- **The summarizer dropped most of it.** Despite the `PRESERVE` markers, the summary I got back carried none of the `peerCard` or the `IDENTITY:`/`ATTRIBUTE:` lines. The cost is paid on the way in; the content doesn't make it out. (n=1 — but a summarizer focused on the technical work has little reason to keep "prefers bullet points".)
+- **The session summary is behind the conversation, so it competes with the host's own.** Mine listed as `Next Steps` two items that had been finished before I compacted. Marked `MUST be preserved`, that's stale state arguing with a fresher summary.
+- **The conclusions aren't session-scoped.** `aiPeer.context()` is peer-global, so conclusions from a *different* repo's session landed in this session's anchor — same cross-project bleed that `injection.perTurn: []` avoids on the per-turn path.
+
+The two dialectics are 43% of the payload and essentially all of the latency: the hook took 7s wall-clock, and `peer.chat` is the expensive call. On the Codex port sharing this workspace I also see `HTTP 429: Rate limit exceeded: 600 per 1 minute`, which two dialectics per compaction can only make worse.
+
+Worth noting for anyone weighing this: the hook is **read-only**. It issues four reads, formats, prints, exits — messages are already persisted by `UserPromptSubmit`/`Stop`. Skipping it loses no memory, only the injection.
+
+What I run: `preCompactAnchor: "full" | "off"` — **default `"full"`, i.e. today's upstream behavior**; env override `HONCHO_PRE_COMPACT_ANCHOR`. On `off` the hook logs and exits before constructing the client. Verified against a dead endpoint: `off` returns in 131ms with no network call, `full` still attempts the fetch. Two states rather than three deliberately — a `peerCard`-only middle ground is the one component worth keeping, and it's also the one the summarizer already discards.
+
+## 3. `#107` covers worktrees, but not subdirectories of a regular checkout
 
 `#107` was exactly the fix I'd been carrying for worktrees, so that half is now yours. The other half is still open: opening the CLI in a subdirectory of a plain repo still mints a session named after the subdirectory.
 
@@ -79,6 +108,8 @@ Thanks for Honcho — the memory model is a good thing to build on.
 ### Notas para o Rafa (não incluir ao postar)
 
 - **Reescrita completa em 2026-08-05.** A versão anterior oferecia 4 blocos; três morreram: `writeMode`/fila (upstream `#73`/`#88`), `captureToolCalls` (o `session-end.ts` sumiu), `contextScope` (backend corrigido em `#881`, ver draft 01 marcado como obsoleto). A metade de worktree do item de identidade de sessão virou o `#107` deles.
+- **Item 2 é posterior ao rebase**, escrito no mesmo dia depois da primeira compactação real com o `injectOnCompact: slim` ligado. A ordem importa: só dava para enxergar o custo do anchor depois que o `SessionStart` parou de injetar por cima. Vale como argumento na issue — não é teoria, é o que apareceu ao medir.
 - **Commits citáveis** (branch `rebase/0.2.11`, worktree `~/repos/claude-honcho-rebase`, ainda não publicado): `9881faf` subdiretórios, `73eb725` política, `f75a777` flag, `f335969` hooks. Se for postar, decida antes se quer publicar o branch para poder linkar os SHAs — hoje eles não são públicos.
-- **Números do item 1** foram medidos no seu peer real em 2026-08-05, não estimados.
+- **Números dos itens 1 e 2** foram medidos no seu peer real em 2026-08-05, não estimados.
+- **O item 2 tem um flanco que eles podem atacar:** ao desligar o anchor, o `peerCard` deixa de existir na janela pós-compactação (o `SessionStart` já está em `slim`). A resposta honesta é que ele hoje já não sobrevive ao sumarizador, e que as tools MCP são a via de recall — mas se o mantenedor discordar, o meio-termo `peerCard`-only é a concessão natural.
 - Ordem sugerida: deixar o `#114` responder primeiro. Se houver receptividade, esta vai em seguida; a `03` (Codex) é anúncio e não tem pressa.

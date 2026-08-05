@@ -4,8 +4,8 @@ import { fileURLToPath } from "url";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { captureGitState } from "./git.js";
 import { getInstanceIdForCwd, getClaudeInstanceId } from "./cache.js";
-import type { InjectOnCompact } from "./injection-policy.js";
-export type { InjectOnCompact } from "./injection-policy.js";
+import type { InjectOnCompact, PreCompactAnchor } from "./injection-policy.js";
+export type { InjectOnCompact, PreCompactAnchor } from "./injection-policy.js";
 
 function sanitizeForSessionName(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
@@ -203,6 +203,8 @@ export interface HostConfig {
   rememberTool?: boolean;
   /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
   injectOnCompact?: InjectOnCompact;
+  /** Whether PreCompact emits the memory anchor (default: "full" — upstream behaviour). */
+  preCompactAnchor?: PreCompactAnchor;
 }
 
 let _detectedHost: HonchoHost | null = null;
@@ -326,6 +328,8 @@ interface HonchoFileConfig {
   rememberTool?: boolean;
   /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
   injectOnCompact?: InjectOnCompact;
+  /** Whether PreCompact emits the memory anchor (default: "full" — upstream behaviour). */
+  preCompactAnchor?: PreCompactAnchor;
   hosts?: Record<string, HostConfig>;
   /** When true, flat workspace/aiPeer fields apply to ALL hosts,
    *  ignoring host-specific blocks. When false (default), each host
@@ -386,6 +390,8 @@ export interface HonchoCLAUDEConfig {
   rememberTool?: boolean;
   /** What SessionStart injects after a context compaction (default: "full" — upstream behaviour). */
   injectOnCompact?: InjectOnCompact;
+  /** Whether PreCompact emits the memory anchor (default: "full" — upstream behaviour). */
+  preCompactAnchor?: PreCompactAnchor;
   /** Temporarily disable plugin (default: true) */
   enabled?: boolean;
   /** Enable file logging to ~/.honcho/ (default: true) */
@@ -525,6 +531,7 @@ function resolveConfig(raw: HonchoFileConfig, host: HonchoHost): HonchoCLAUDECon
     injection: hostBlock?.injection ?? raw.injection,
     rememberTool: hostBlock?.rememberTool ?? raw.rememberTool,
     injectOnCompact: hostBlock?.injectOnCompact ?? raw.injectOnCompact,
+    preCompactAnchor: hostBlock?.preCompactAnchor ?? raw.preCompactAnchor,
     enabled: hostBlock?.enabled ?? raw.enabled,
     logging: hostBlock?.logging ?? raw.logging,
     globalOverride: raw.globalOverride,
@@ -691,6 +698,7 @@ export function saveConfig(config: HonchoCLAUDEConfig): void {
   setHostIfExplicit("injection", config.injection, existing.injection);
   setHostIfExplicit("rememberTool", config.rememberTool, existing.rememberTool);
   setHostIfExplicit("injectOnCompact", config.injectOnCompact, existing.injectOnCompact);
+  setHostIfExplicit("preCompactAnchor", config.preCompactAnchor, existing.preCompactAnchor);
 
   // Preserve a host-scoped apiKey already on disk. This integration never writes
   // apiKey (config.apiKey is the *resolved* key — env/root — and must not be
@@ -950,6 +958,16 @@ export function getInjectOnCompact(config: HonchoCLAUDEConfig): InjectOnCompact 
   const env = process.env.HONCHO_INJECT_ON_COMPACT;
   if (env && VALID_INJECT_ON_COMPACT.has(env)) return env as InjectOnCompact;
   return config.injectOnCompact ?? "full";
+}
+
+const VALID_PRE_COMPACT_ANCHOR = new Set<string>(["full", "off"] satisfies PreCompactAnchor[]);
+
+/** Pre-compaction memory anchor mode. Priority: env > config (host > root) > "full".
+ *  Defaults to "full" so an unconfigured install behaves exactly like upstream. */
+export function getPreCompactAnchor(config: HonchoCLAUDEConfig): PreCompactAnchor {
+  const env = process.env.HONCHO_PRE_COMPACT_ANCHOR;
+  if (env && VALID_PRE_COMPACT_ANCHOR.has(env)) return env as PreCompactAnchor;
+  return config.preCompactAnchor ?? "full";
 }
 
 export function isLoggingEnabled(): boolean {
