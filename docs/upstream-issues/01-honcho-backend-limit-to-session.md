@@ -1,8 +1,58 @@
-# DRAFT — GitHub issue for `plastic-labs/honcho`
+# OBSOLETO — NÃO POSTAR (fechado em 2026-08-05)
 
-> Draft to review before posting to https://github.com/plastic-labs/honcho/issues
+> **O bug descrito abaixo já foi corrigido no upstream.** `plastic-labs/honcho` commit
+> `672f4c6` (2026-07-24), PR **#881** — *"fix: apply session scoping to all
+> working-representation query paths"*. A descrição do commit deles bate com o
+> diagnóstico deste draft: *"session_name was only applied to the recent-documents
+> query; the semantic and most-derived paths ignored it, so limit_to_session leaked
+> cross-session conclusions"*.
+>
+> Estado do código no `main` deles em 2026-08-05:
+> - `_query_documents_semantic` e `_query_documents_most_derived` agora recebem `session_allowlist`
+> - `src/routers/sessions.py` faz `session_allowlist=[session_id] if limit_to_session else None` — o parâmetro público está ligado ao caminho corrigido
+> - `#882` (2026-07-28) ainda ampliou isso com allowlist de sessões via `filters`
+>
+> **Por que a produção ainda se comporta como antes:** o fix é posterior à última
+> release. Não é PR parado nem deploy esquecido — é o ciclo normal de release:
+>
+> | | |
+> |---|---|
+> | `v3.0.12` (última tag) | 2026-07-13 |
+> | `#881` mergeado no `main` | 2026-07-24 — **11 dias depois da tag** |
+> | `main` hoje | 23 commits à frente da `v3.0.12` |
+>
+> O comportamento antigo em produção foi medido em 2026-08-05 via REST puro, sem SDK,
+> na workspace `rafa`: `limit_to_session=true` e `=false` devolvem `peer_representation`
+> **idêntica** (1408 chars), ambas contendo conclusions de Southeast Permits / EstateMap /
+> Bubble.io a partir da sessão `rafa-claude-honcho`. A chamada usou `peer_target`, então
+> caiu no caminho do router que aplica `session_allowlist` — não é o branch antigo de
+> `not peer_target`.
+>
+> **Ação, se alguma:** não abrir issue de bug — seria reportar algo já corrigido. Se
+> quiser interagir, a pergunta útil é sobre release, não sobre o bug: *"vi que o #881
+> entrou depois da v3.0.12 — tem previsão de release?"*. Opcional.
+>
+> **Gatilho de reavaliação:** quando sair release nova do backend (> `v3.0.12`) e o
+> deploy chegar na cloud, refazer o teste de duas linhas abaixo. Se `true` e `false`
+> passarem a divergir, o `contextScope: session` — descartado em 2026-08-05 por causa
+> deste bug — volta a valer, provavelmente como um PR de ~5 linhas no plugin (passar
+> `limitToSession` em `fetchUserContext`), não como flag nova. Nesse cenário,
+> `injection.perTurn: []` deixa de ser necessário.
+>
+> ```bash
+> # o teste: as duas chamadas devem DIVERGIR quando o fix estiver em produção
+> curl -s "$URL/v3/workspaces/$WS/sessions/$SESSION/context?peer_target=$PEER&search_query=<termo+de+outro+projeto>&limit_to_session=true&max_conclusions=6"  -H "Authorization: Bearer $KEY"
+> curl -s "$URL/v3/workspaces/$WS/sessions/$SESSION/context?peer_target=$PEER&search_query=<termo+de+outro+projeto>&limit_to_session=false&max_conclusions=6" -H "Authorization: Bearer $KEY"
+> ```
+>
+> O texto original segue abaixo como registro do diagnóstico.
+
+---
+
+# DRAFT ORIGINAL — GitHub issue for `plastic-labs/honcho`
+
 > Target repo: **plastic-labs/honcho** (the backend), NOT claude-honcho (the plugin).
-> Re-validated against upstream `main` on **2026-06-11**: `_query_documents_semantic` (def ~L370) still takes no `session_name`, `_query_documents_most_derived` (def ~L434) still has no `session_name` param, only `_query_documents_recent` (~L408, filter ~L421) applies it; `test_get_session_context_with_limit_to_session` (~L1336) still asserts only status 200 + key presence. Bug intact.
+> Validado contra o `main` deles em **2026-06-11** (antes do fix `#881`): `_query_documents_semantic` (def ~L370) sem `session_name`, `_query_documents_most_derived` (def ~L434) sem o parâmetro, só `_query_documents_recent` (~L408, filtro ~L421) aplicando; `test_get_session_context_with_limit_to_session` (~L1336) assertando apenas status 200 + presença da chave.
 
 ---
 
