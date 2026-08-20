@@ -20,19 +20,34 @@ bash plugins/honcho/scripts/install-local.sh   # then restart Claude Code
 **disabled**, so each hook returns before reading stdin — it cannot catch a bundled entry that
 drops the hook payload (that was upstream PR #114).
 
-`install-local.sh` rsyncs the source into `~/.claude/plugins/cache/honcho/honcho/<version>` —
-the only way to exercise hook/MCP changes live, since Claude Code runs the cached copy, not this repo.
+`install-local.sh` rsyncs the **source tree** into `~/.claude/plugins/cache/honcho/honcho/<version>`.
+Note the path: the plugin is installed as `honcho@rafa-plugins`, so the live copy is
+`~/.claude/plugins/cache/rafa-plugins/honcho/<version>` and the script writes to a directory Claude
+Code never reads. It also predates the bundle channel — the real install is a `publish-release-branch.sh`
+release followed by `/plugin update`. Claude Code runs the cached copy, never this repo.
 
 ## Gotchas
 
-- **`plugins/honcho/node_modules/` is committed on purpose.** The plugin ships as-is through the
-  marketplace, with no install step on the user's machine. `bun install` produces a huge diff — that's
-  expected, not something to clean up.
+- **The plugin is distributed from the `release/honcho` branch, not from `plugins/honcho`.**
+  `rafa-plugins/marketplace.json` points at `{source: github, repo: rafachavantes/claude-honcho,
+  ref: release/honcho}`. That branch holds the built bundle — `scripts/build.ts` output, which
+  inlines every dependency — so it runs on plain `node` with no `node_modules`. Publish a release
+  with `bash plugins/honcho/scripts/publish-release-branch.sh` (build + smoke + validate, then a
+  force push that rewrites the branch). **Nothing reaches the user until that script runs**, no
+  matter what is on `main`.
+- **`plugins/honcho/node_modules/` is still committed, but nothing depends on it any more.**
+  It predates the bundle channel above, and upstream deleted it in #116 (they moved to an npm
+  source). Keep it only until the rebase onto #116, which drops it; distribution already survives
+  without it. `bun install` produces a huge diff — expected, not something to clean up.
 - **A release bumps the version in two files** (`plugins/honcho/package.json` and
   `plugins/honcho/.claude-plugin/plugin.json`), plus `.claude-plugin/marketplace.json` when the
   release is user-visible. The fork uses a 4th segment (`0.2.5.3`) to sort above upstream's
-  3-segment versions — `scripts/check-version.sh` compares via `sort -V` against **upstream's**
-  marketplace.json.
+  3-segment versions. Two consequences: `.github/workflows/release.yml` **rejects** a 4-segment
+  version (its semver regex allows three), which is why releases go through
+  `publish-release-branch.sh` instead of the workflow; and `scripts/check-version.sh` is **dead** —
+  it greps a `version` field that upstream's marketplace.json no longer carries for `honcho`
+  (now an npm source), so it silently exits 0 and never warns. Upstream is on 0.3.x, so the
+  sort-above-upstream trick no longer holds either.
 - **Parity with `honcho-codex`** (the Python/Codex CLI port, sibling repo): same version, same
   behavior. A behavior change here usually needs the mirrored change there.
 - **`hooks/*.ts` are thin wrappers** — logic lives in `src/hooks/*.ts`. Claude Code auto-loads
