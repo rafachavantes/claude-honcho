@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Honcho plugins for Claude Code - memory, development tools, and more",
-    "version": "0.2.11.2"
+    "version": "0.2.11.3"
   },
   "plugins": [
     {
