@@ -1,0 +1,19 @@
+{
+  "name": "@rafachavantes/claude-honcho",
+  "version": "0.3.1.1",
+  "type": "module",
+  "description": "Persistent memory for Claude Code sessions using Honcho (Rafa's fork: repo-root session identity, slim post-compact injection)",
+  "author": "Rafael Chavantes <contato@moara.digital>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafachavantes/claude-honcho.git"
+  },
+  "keywords": [
+    "memory",
+    "context",
+    "ai",
+    "honcho",
+    "persistence"
+  ]
+}

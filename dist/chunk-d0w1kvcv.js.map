@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sources": ["../../src/injection-policy.ts"],
+  "sourcesContent": [
+    "export type InjectOnCompact = \"full\" | \"slim\" | \"off\";\n\n/** Whether PreCompact emits the memory anchor at all. */\nexport type PreCompactAnchor = \"full\" | \"off\";\n\nexport const SLIM_POINTER =\n  \"Honcho memory is active for this session; older details can be recalled via the honcho tools.\";\n\n/**\n * Source-aware injection policy. Only a SessionStart fired by context\n * compaction is downgraded — the host CLI's own compaction summary already\n * carries recent context. Every other source (startup, resume, clear,\n * missing) keeps full injection.\n */\nexport function decideInjection(\n  source: string | undefined,\n  injectOnCompact: InjectOnCompact,\n): InjectOnCompact {\n  if (source !== \"compact\") return \"full\";\n  return injectOnCompact;\n}\n"
+  ],
+  "mappings": ";AAKO,IAAM,eACX;AAQK,SAAS,eAAe,CAC7B,QACA,iBACiB;AAAA,EACjB,IAAI,WAAW;AAAA,IAAW,OAAO;AAAA,EACjC,OAAO;AAAA;",
+  "debugId": "8183B81105930EC064756E2164756E21",
+  "names": []
+}
