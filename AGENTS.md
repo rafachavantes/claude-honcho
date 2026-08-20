@@ -14,7 +14,9 @@ cd plugins/honcho && bun test              # full suite; must run from the plugi
 bash plugins/honcho/scripts/publish-release-branch.sh   # ship it; then /plugin update
 ```
 
-**Exit gate (keep green)** — the same one CI runs, from `plugins/honcho/`:
+**Exit gate (keep green)** — from `plugins/honcho/`, and **wider than CI**: `ci.yml` runs
+everything below *except* `bun test`, so the suite only ever gates locally and in
+`publish-release-branch.sh`:
 `bunx tsc --noEmit` · `bun test` · `bun run scripts/build.ts` · `bash scripts/smoke.sh .stage` ·
 `claude plugin validate .stage --strict`. Two traps: `tsconfig.json` only includes `src/**`, so
 `tsc` never checks `tests/` or `hooks/`; and `smoke.sh` runs every entry point with the plugin
@@ -48,8 +50,10 @@ wrote to `cache/honcho/honcho/`, a path Claude Code never reads for this install
   the fork sits on commits they have not released yet. Two consequences:
   `.github/workflows/release.yml` **rejects** a 4-segment version (its semver regex allows three),
   which is why releases go through `publish-release-branch.sh` instead of the workflow; and
-  `scripts/check-version.sh` is **dead** — it greps a `version` field upstream's marketplace.json
-  no longer carries for `honcho` (now an npm source), so it silently exits 0 and never warns.
+  `scripts/check-version.sh` — which runs on every `SessionStart` — compares the local version
+  against **upstream's npm dist-tag**, not against the fork's channel. It is live (upstream #116
+  repointed it at the registry), so once upstream releases 0.3.2 it will announce an update that
+  the fork's `release/honcho` branch does not have. Either repoint it or accept the false positive.
 - **Parity with `honcho-codex`** (the Python/Codex CLI port, sibling repo): same version, same
   behavior. A behavior change here usually needs the mirrored change there.
 - **`hooks/*.ts` are thin wrappers** — logic lives in `src/hooks/*.ts`. Claude Code auto-loads
@@ -60,7 +64,8 @@ wrote to `cache/honcho/honcho/`, a path Claude Code never reads for this install
 - **Hooks can't draw to the TUI** (no `/dev/tty`). They write `~/.honcho/state-<session_id>.json`
   and the statusline script renders from it — see `src/state.ts`.
 - **Session identity is the git repo root**, not raw cwd, so subdirs, post-`cd` cwds and worktrees
-  map to one Honcho session (`src/git.ts`).
+  map to one Honcho session. The resolution lives in `src/config.ts` (`sessionRootFor`,
+  `getSessionName`) — `src/git.ts` holds branch/commit capture, not session identity.
 
 ## Workflow (o jeito do Rafa)
 

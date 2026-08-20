@@ -234,7 +234,10 @@ export function consumePostCompactFlag(cwd: string, instanceId?: string): boolea
   const key = postCompactKey(cwd);
   const entry = cache.postCompact?.[key];
   if (!entry) return false;
-  if (entry.instanceId && instanceId && entry.instanceId !== instanceId) return false;
+  // A flag with an owner is consumed only by that owner — an anonymous
+  // consumer must not claim it either, or a parallel session eats the
+  // downgrade. Refusing costs one full injection; claiming costs the feature.
+  if (entry.instanceId && entry.instanceId !== instanceId) return false;
   delete cache.postCompact![key];
   saveContextCache(cache);
   return true;

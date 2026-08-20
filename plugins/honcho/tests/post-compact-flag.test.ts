@@ -32,6 +32,10 @@ r.otherInstance = consumePostCompactFlag(cwd, "instance-b");
 r.ownInstance = consumePostCompactFlag(cwd, "instance-a");
 
 setPostCompactFlag(cwd, "instance-a");
+r.anonymousConsumer = consumePostCompactFlag(cwd, undefined);
+r.ownerAfterAnonymous = consumePostCompactFlag(cwd, "instance-a");
+
+setPostCompactFlag(cwd, "instance-a");
 clearPostCompactFlag(cwd);
 r.afterClear = consumePostCompactFlag(cwd, "instance-a");
 
@@ -69,5 +73,13 @@ console.log(JSON.stringify(r));
 
   test("clear removes a pending flag", () => {
     expect(results.afterClear).toBe(false);
+  });
+
+  test("an anonymous consumer does not claim another instance's flag", () => {
+    // The consumer's instanceId can be missing (no session_id, empty cache).
+    // Consuming would eat the owner's downgrade; refusing costs one full
+    // injection, which is upstream's behaviour anyway.
+    expect(results.anonymousConsumer).toBe(false);
+    expect(results.ownerAfterAnonymous).toBe(true);
   });
 });

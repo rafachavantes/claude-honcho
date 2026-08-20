@@ -115,17 +115,23 @@ await Bun.write(
   JSON.stringify({ ...pluginManifest, version }, null, 2) + "\n",
 );
 
-// package.json: publish manifest for the npm source. Deps are bundled, so
-// none are declared.
+// package.json: publish manifest. Deps are bundled, so none are declared.
+// Name and author come from the plugin manifest: this fork ships its own
+// bundle, and stamping upstream's package name on it would misattribute the
+// artefact — the branch channel serves this file to anyone who clones it.
+const manifestAuthor =
+  typeof pluginManifest.author === "string"
+    ? pluginManifest.author
+    : `${pluginManifest.author?.name ?? ""} <${pluginManifest.author?.email ?? ""}>`.trim();
 await Bun.write(
   join(STAGE, "package.json"),
   JSON.stringify(
     {
-      name: "@honcho-ai/claude-honcho",
+      name: "@rafachavantes/claude-honcho",
       version,
       type: "module",
       description: pluginManifest.description,
-      author: "Plastic Labs <hello@plasticlabs.ai>",
+      author: manifestAuthor || "Plastic Labs <hello@plasticlabs.ai>",
       license: pluginManifest.license,
       repository: { type: "git", url: `git+${pluginManifest.repository}.git` },
       keywords: pluginManifest.keywords,
