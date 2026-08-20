@@ -12,8 +12,8 @@
     {
       "name": "honcho",
       "source": {
-        "source": "github",
-        "repo": "rafachavantes/claude-honcho",
+        "source": "url",
+        "url": "https://github.com/rafachavantes/claude-honcho.git",
         "ref": "release/honcho"
       },
       "description": "Persistent memory for Claude Code sessions using Claude Honcho (Rafa's fork: one session per repo across subdirectories, plus config-gated control over what is injected around a compaction)",
