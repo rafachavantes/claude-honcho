@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, sessionRootFor, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, getInjectOnCompact } from "../config.js";
+import { loadConfig, getSessionForPath, setSessionForPath, sessionOverrideToPersist, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, getInjectOnCompact } from "../config.js";
 import { renderSessionStart } from "../injection.js";
 import {
   setCachedSessionId,
@@ -146,16 +146,10 @@ export async function handleSessionStart(): Promise<void> {
       : [userPeer, aiPeer];
     await session.addPeers(peers);
 
-    // Only persist session names for per-directory strategy (stable names).
-    // Dynamic strategies (git-branch, chat-instance) change per session,
-    // so locking them as overrides defeats the purpose.
-    //
-    // Key the override on the same root the name was resolved from. Writing
-    // the raw cwd would mint one entry per subdirectory visited, and because
-    // getSessionForPath checks the exact cwd before the root, such an entry
-    // would later shadow a deliberate rename of the repo's own mapping.
-    const overrideKey = sessionRootFor(cwd) ?? cwd;
-    if (!getSessionForPath(overrideKey) && (!config.sessionStrategy || config.sessionStrategy === "per-directory")) {
+    // Persist a stable override, keyed on the repository root. Returns null
+    // when a mapping already covers this cwd or the strategy is dynamic.
+    const overrideKey = sessionOverrideToPersist(cwd);
+    if (overrideKey) {
       setSessionForPath(overrideKey, sessionName);
     }
 

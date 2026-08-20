@@ -16,7 +16,7 @@
         "repo": "rafachavantes/claude-honcho",
         "ref": "release/honcho"
       },
-      "description": "Persistent memory for Claude Code sessions using Honcho (Rafa's fork: repo-root session identity, slim post-compact injection, both config-gated)",
+      "description": "Persistent memory for Claude Code sessions using Claude Honcho (Rafa's fork: one session per repo across subdirectories, plus config-gated control over what is injected around a compaction)",
       "keywords": [
         "memory",
         "context",

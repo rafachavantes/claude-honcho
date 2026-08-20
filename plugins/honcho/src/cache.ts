@@ -236,7 +236,9 @@ export function consumePostCompactFlag(cwd: string, instanceId?: string): boolea
   if (!entry) return false;
   // A flag with an owner is consumed only by that owner — an anonymous
   // consumer must not claim it either, or a parallel session eats the
-  // downgrade. Refusing costs one full injection; claiming costs the feature.
+  // downgrade. A refused flag stays pending: it is consumed by the next
+  // identified prompt, or cleared by the next non-compact start. So the cost
+  // is a deferred downgrade, not necessarily a single full injection.
   if (entry.instanceId && entry.instanceId !== instanceId) return false;
   delete cache.postCompact![key];
   saveContextCache(cache);

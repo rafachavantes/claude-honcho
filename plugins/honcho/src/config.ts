@@ -888,6 +888,27 @@ export function getSessionName(cwd: string, instanceId?: string): string {
   });
 }
 
+/**
+ * The path SessionStart should persist a session override under, or null when
+ * one already applies. Keyed on the repository root so a repo gets one entry
+ * rather than one per subdirectory visited — and because getSessionForPath
+ * checks the exact cwd before the root, a subdirectory entry would otherwise
+ * shadow a deliberate rename of the repo's own mapping.
+ *
+ * Returns null when any override already covers this cwd, including a legacy
+ * one written under a raw subdirectory path. Writing then would promote that
+ * subdirectory's session to the whole repository.
+ */
+export function sessionOverrideToPersist(cwd: string): string | null {
+  const config = loadConfig();
+  const strategy = config?.sessionStrategy ?? "per-directory";
+  // Dynamic strategies change per session; locking them defeats the purpose.
+  if (strategy !== "per-directory") return null;
+  const key = sessionRootFor(cwd) ?? cwd;
+  if (getSessionForPath(cwd, key)) return null;
+  return key;
+}
+
 export function setSessionForPath(cwd: string, sessionName: string): void {
   const config = loadConfig();
   if (!config) return;

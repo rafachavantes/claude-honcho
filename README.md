@@ -3,7 +3,7 @@
 [![Honcho Banner](./assets/honcho_clawd.png)](https://honcho.dev)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm](https://img.shields.io/npm/v/@honcho-ai/claude-honcho)](https://www.npmjs.com/package/@honcho-ai/claude-honcho)
+[![fork](https://img.shields.io/badge/fork%20of-plastic--labs%2Fclaude--honcho-blue)](https://github.com/plastic-labs/claude-honcho)
 [![Honcho](https://img.shields.io/badge/Honcho-Memory%20API-blue)](https://honcho.dev)
 
 A plugin marketplace for Claude Code, powered by [Honcho](https://honcho.dev) from Plastic Labs.
@@ -22,7 +22,7 @@ A plugin marketplace for Claude Code, powered by [Honcho](https://honcho.dev) fr
 Add the marketplace to Claude Code:
 
 ```
-/plugin marketplace add plastic-labs/claude-honcho
+/plugin marketplace add rafachavantes/claude-honcho
 ```
 
 Then install the plugin(s) you want:
@@ -91,7 +91,7 @@ Then restart your terminal so the new variables take effect.
 ### Step 3: Install the Plugin
 
 ```
-/plugin marketplace add plastic-labs/claude-honcho
+/plugin marketplace add rafachavantes/claude-honcho
 /plugin install honcho@honcho
 ```
 

@@ -711,6 +711,8 @@ function handleSetConfig(args: Record<string, unknown>) {
     observationMode: cfg.observationMode ?? "unified",
     statusline: cfg.statusline ?? "on",
     redactPatterns: cfg.redactPatterns ?? [],
+    injectOnCompact: cfg.injectOnCompact ?? "full",
+    preCompactAnchor: cfg.preCompactAnchor ?? "full",
     injection: cfg.injection ?? {},
     rememberTool: cfg.rememberTool === true,
     enabled: cfg.enabled !== false,

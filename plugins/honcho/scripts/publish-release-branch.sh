@@ -38,18 +38,24 @@ echo "releasing $VERSION from $(git rev-parse --short HEAD) ($(git rev-parse --a
 bunx tsc --noEmit
 bun test
 bun run scripts/build.ts
-bash scripts/smoke.sh .stage
-claude plugin validate .stage --strict
 
+# Cross-check before smoke and validate: a mismatch here invalidates both.
 [ "$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' .stage/.claude-plugin/plugin.json | head -n1)" = "$VERSION" ] \
   || { echo "staged version does not match package.json" >&2; exit 1; }
+
+bash scripts/smoke.sh .stage
+claude plugin validate .stage --strict
 
 cd .stage
 git init -q -b release/honcho
 # The workflow sets an identity explicitly; a machine without a global one
 # would otherwise fail at commit time, after the whole gate has run.
-git config user.name "$(git -C .. config user.name || echo Rafa)"
-git config user.email "$(git -C .. config user.email || echo contato@moara.digital)"
+# `git config` exits 0 on a configured-but-empty value, so test the string,
+# not the exit code — an empty identity fails the commit after the full gate.
+GIT_NAME="$(git -C .. config user.name || true)"
+GIT_EMAIL="$(git -C .. config user.email || true)"
+git config user.name "${GIT_NAME:-Rafa}"
+git config user.email "${GIT_EMAIL:-contato@moara.digital}"
 git add -A
 git commit -q -m "honcho v$VERSION"
 git push -f "$REMOTE" release/honcho

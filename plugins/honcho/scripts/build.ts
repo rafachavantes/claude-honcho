@@ -119,10 +119,15 @@ await Bun.write(
 // Name and author come from the plugin manifest: this fork ships its own
 // bundle, and stamping upstream's package name on it would misattribute the
 // artefact — the branch channel serves this file to anyone who clones it.
-const manifestAuthor =
-  typeof pluginManifest.author === "string"
-    ? pluginManifest.author
-    : `${pluginManifest.author?.name ?? ""} <${pluginManifest.author?.email ?? ""}>`.trim();
+const manifestAuthor = (() => {
+  const a = pluginManifest.author;
+  if (typeof a === "string") return a.trim();
+  const name = a?.name?.trim();
+  const email = a?.email?.trim();
+  // A partial object must not produce "Name <>" or "<>" — npm would carry it.
+  if (name && email) return `${name} <${email}>`;
+  return name || "";
+})();
 await Bun.write(
   join(STAGE, "package.json"),
   JSON.stringify(
@@ -131,7 +136,7 @@ await Bun.write(
       version,
       type: "module",
       description: pluginManifest.description,
-      author: manifestAuthor || "Plastic Labs <hello@plasticlabs.ai>",
+      author: manifestAuthor || "Rafael Chavantes <contato@moara.digital>",
       license: pluginManifest.license,
       repository: { type: "git", url: `git+${pluginManifest.repository}.git` },
       keywords: pluginManifest.keywords,
