@@ -11,9 +11,17 @@
   "plugins": [
     {
       "name": "honcho",
-      "source": { "source": "npm", "package": "@honcho-ai/claude-honcho" },
-      "description": "Persistent memory for Claude Code sessions using Honcho",
-      "keywords": ["memory", "context", "persistence"],
+      "source": {
+        "source": "github",
+        "repo": "rafachavantes/claude-honcho",
+        "ref": "release/honcho"
+      },
+      "description": "Persistent memory for Claude Code sessions using Honcho (Rafa's fork: repo-root session identity, slim post-compact injection, both config-gated)",
+      "keywords": [
+        "memory",
+        "context",
+        "persistence"
+      ],
       "strict": false
     },
     {
@@ -21,7 +29,11 @@
       "source": "./plugins/honcho-dev",
       "description": "Skills for building AI applications with the Honcho SDK",
       "version": "0.2.4",
-      "keywords": ["sdk", "development", "migration"],
+      "keywords": [
+        "sdk",
+        "development",
+        "migration"
+      ],
       "strict": false
     }
   ]

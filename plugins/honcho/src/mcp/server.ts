@@ -25,6 +25,8 @@ import {
   type HonchoEnvironment,
   type ObservationMode,
   type StatuslineMode,
+  type InjectOnCompact,
+  type PreCompactAnchor,
   type SessionStartComponent,
   type PerTurnComponent,
   SESSION_START_COMPONENTS,
@@ -120,6 +122,8 @@ function handleGetConfig(cwd: string) {
     observationMode: cfg.observationMode ?? "unified",
     statusline: cfg.statusline ?? "on",
     redactPatterns: cfg.redactPatterns ?? [],
+    injectOnCompact: cfg.injectOnCompact ?? "full",
+    preCompactAnchor: cfg.preCompactAnchor ?? "full",
     injection: cfg.injection ?? {},
     rememberTool: cfg.rememberTool === true,
     enabled: cfg.enabled !== false,
@@ -497,6 +501,32 @@ function handleSetConfig(args: Record<string, unknown>) {
       cfg.statusline = mode as StatuslineMode;
       // statusline is a global field — write to root (user-directed action)
       saveRootField("statusline", cfg.statusline);
+      break;
+    }
+
+    case "injectOnCompact": {
+      const mode = String(value).toLowerCase();
+      if (mode !== "full" && mode !== "slim" && mode !== "off") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "injectOnCompact must be one of: full, slim, off" }, null, 2) }],
+          isError: true,
+        };
+      }
+      previousValue = cfg.injectOnCompact ?? "full";
+      cfg.injectOnCompact = mode as InjectOnCompact;
+      break;
+    }
+
+    case "preCompactAnchor": {
+      const mode = String(value).toLowerCase();
+      if (mode !== "full" && mode !== "off") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: false, error: "preCompactAnchor must be one of: full, off" }, null, 2) }],
+          isError: true,
+        };
+      }
+      previousValue = cfg.preCompactAnchor ?? "full";
+      cfg.preCompactAnchor = mode as PreCompactAnchor;
       break;
     }
 
@@ -985,6 +1015,8 @@ export async function runMcpServer(): Promise<void> {
                   "reasoningLevel",
                   "observationMode",
                   "redactPatterns",
+                  "injectOnCompact",
+                  "preCompactAnchor",
                   "injection.sessionStart",
                   "injection.perTurn",
                   "injection.showContents",

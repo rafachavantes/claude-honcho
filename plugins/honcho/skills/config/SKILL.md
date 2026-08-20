@@ -39,7 +39,7 @@ AskUserQuestion:
     - label: "Workspace"
       description: "Data space and session scope (currently: {resolved.workspace})"
     - label: "Memory injection"
-      description: "What Honcho injects at session start and per turn (currently: start [{resolved.injection.sessionStart}], turn [{resolved.injection.perTurn}], shown in UI [{resolved.injection.showContents}])"
+      description: "What Honcho injects at session start, per turn, and around compaction (currently: start [{resolved.injection.sessionStart}], turn [{resolved.injection.perTurn}], shown in UI [{resolved.injection.showContents}], compaction [anchor {resolved.preCompactAnchor}, re-inject {resolved.injectOnCompact}])"
 ```
 
 For the "Memory injection" description, use the *effective* values: if `injection.sessionStart` is unset it is `["directives", "summary", "peerCard"]`, and if `injection.perTurn` is unset it is `["userContext"]` (user conclusions on). A stored perTurn value of `"context"` is the legacy name for `"userContext"` — treat them as the same. `injection.showContents` is `[]` when unset — render that as `none`.
@@ -189,12 +189,27 @@ AskUserQuestion:
           description: "List each injected message, one truncated line each"
         - label: "Dialectic recall"
           description: "Print the full reasoned answer — prose, can be long"
+    - question: "What should Honcho do around a context compaction?"
+      header: "Compaction"
+      multiSelect: false
+      options:
+        - label: "Everything (default)"
+          description: "Anchor memory before compacting, then re-inject the full package after — upstream behaviour"
+        - label: "Skip the re-injection"
+          description: "Still anchor before compacting, but the first prompt after gets a one-line pointer instead of the full package"
+        - label: "Skip both"
+          description: "No anchor before, one-line pointer after — the CLI's own summary already carries recent context"
 ```
 
 Map the selections to component names, then call `set_config` once per field:
 - Session start → `injection.sessionStart`, mapping "Memory directives"→`directives`, "Session summary"→`summary`, "Peer card"→`peerCard`, "Representation"→`peerRepresentation`.
 - Per turn → `injection.perTurn`, mapping "User conclusions"→`userContext`, "Assistant conclusions"→`assistantContext`, "Session messages"→`sessionContext`, "Dialectic recall"→`dialectic`.
 - Show in UI → `injection.showContents`, same mapping as per turn.
+- Compaction → two fields. "Everything" → `injectOnCompact: "full"` + `preCompactAnchor: "full"`.
+  "Skip the re-injection" → `injectOnCompact: "slim"` + `preCompactAnchor: "full"`.
+  "Skip both" → `injectOnCompact: "slim"` + `preCompactAnchor: "off"`. Both default to `"full"`,
+  which reproduces upstream behaviour exactly. `injectOnCompact` also accepts `"off"` (no injection
+  at all on the first post-compact prompt, not even the pointer) — offer it only if asked.
 
 Pass the value as a JSON array (e.g. `["directives","summary","peerCard"]`). An empty selection means `[]`: for `injection.sessionStart` and `injection.perTurn` that surface then injects nothing, and for `injection.showContents` (the default) every enabled per-turn component still injects — it just reports a one-line summary (count, tokens, timing) instead of printing its payload.
 

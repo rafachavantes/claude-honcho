@@ -203,6 +203,12 @@ All configuration lives in a single global file at `~/.honcho/config.json`. You 
     // or: "baseUrl": "http://your-server:8000/v3"
   },
 
+  // Around a context compaction. Both default to "full", which is the
+  // upstream behaviour: anchor memory before compacting, re-inject the full
+  // package after.
+  "injectOnCompact": "full",          // "full" (default) | "slim" (one-line pointer on the first prompt after) | "off"
+  "preCompactAnchor": "full",         // "full" (default) | "off" (skip the pre-compaction anchor entirely)
+
   // Miscellaneous
   "redactPatterns": [],               // Extra regexes redacted from tool summaries (additive to built-in secret patterns)
   "enabled": true,
