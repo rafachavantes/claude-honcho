@@ -40,13 +40,16 @@ wrote to `cache/honcho/honcho/`, a path Claude Code never reads for this install
   If you see a huge node_modules diff, you are on a pre-rebase commit.
 - **A release bumps the version in two files** (`plugins/honcho/package.json` and
   `plugins/honcho/.claude-plugin/plugin.json`), plus `.claude-plugin/marketplace.json` when the
-  release is user-visible. The fork uses a 4th segment (`0.2.5.3`) to sort above upstream's
-  3-segment versions. Two consequences: `.github/workflows/release.yml` **rejects** a 4-segment
-  version (its semver regex allows three), which is why releases go through
-  `publish-release-branch.sh` instead of the workflow; and `scripts/check-version.sh` is **dead** —
-  it greps a `version` field that upstream's marketplace.json no longer carries for `honcho`
-  (now an npm source), so it silently exits 0 and never warns. Upstream is on 0.3.x, so the
-  sort-above-upstream trick no longer holds either.
+  release is user-visible. **The version is upstream's released version plus a 4th segment for the
+  fork revision** — `0.3.1.1` means "upstream 0.3.1 plus fork revision 1". Read the base off
+  upstream's npm dist-tag (`npm view @honcho-ai/claude-honcho version`), not off their
+  `package.json`, which carries a stale dev fallback (releases stamp the version at build time and
+  commit nothing). The 4th segment sorts above their 3-segment release, which is honest whenever
+  the fork sits on commits they have not released yet. Two consequences:
+  `.github/workflows/release.yml` **rejects** a 4-segment version (its semver regex allows three),
+  which is why releases go through `publish-release-branch.sh` instead of the workflow; and
+  `scripts/check-version.sh` is **dead** — it greps a `version` field upstream's marketplace.json
+  no longer carries for `honcho` (now an npm source), so it silently exits 0 and never warns.
 - **Parity with `honcho-codex`** (the Python/Codex CLI port, sibling repo): same version, same
   behavior. A behavior change here usually needs the mirrored change there.
 - **`hooks/*.ts` are thin wrappers** — logic lives in `src/hooks/*.ts`. Claude Code auto-loads
