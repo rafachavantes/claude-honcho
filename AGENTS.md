@@ -9,8 +9,9 @@ TypeScript run directly by Bun, no build step) and `plugins/honcho-dev` (skills 
 ## Commands
 
 ```bash
+cd plugins/honcho && bun install           # node_modules is no longer committed (upstream #116)
 cd plugins/honcho && bun test              # full suite; must run from the plugin dir
-bash plugins/honcho/scripts/install-local.sh   # then restart Claude Code
+bash plugins/honcho/scripts/publish-release-branch.sh   # ship it; then /plugin update
 ```
 
 **Exit gate (keep green)** — the same one CI runs, from `plugins/honcho/`:
@@ -20,11 +21,10 @@ bash plugins/honcho/scripts/install-local.sh   # then restart Claude Code
 **disabled**, so each hook returns before reading stdin — it cannot catch a bundled entry that
 drops the hook payload (that was upstream PR #114).
 
-`install-local.sh` rsyncs the **source tree** into `~/.claude/plugins/cache/honcho/honcho/<version>`.
-Note the path: the plugin is installed as `honcho@rafa-plugins`, so the live copy is
-`~/.claude/plugins/cache/rafa-plugins/honcho/<version>` and the script writes to a directory Claude
-Code never reads. It also predates the bundle channel — the real install is a `publish-release-branch.sh`
-release followed by `/plugin update`. Claude Code runs the cached copy, never this repo.
+Claude Code runs the cached copy under `~/.claude/plugins/cache/rafa-plugins/honcho/<version>`,
+never this repo, so hook and MCP changes only go live after a `publish-release-branch.sh` release
+followed by `/plugin update`. (`install-local.sh` is gone — upstream deleted it in #116, and it
+wrote to `cache/honcho/honcho/`, a path Claude Code never reads for this install.)
 
 ## Gotchas
 
@@ -35,10 +35,9 @@ release followed by `/plugin update`. Claude Code runs the cached copy, never th
   with `bash plugins/honcho/scripts/publish-release-branch.sh` (build + smoke + validate, then a
   force push that rewrites the branch). **Nothing reaches the user until that script runs**, no
   matter what is on `main`.
-- **`plugins/honcho/node_modules/` is still committed, but nothing depends on it any more.**
-  It predates the bundle channel above, and upstream deleted it in #116 (they moved to an npm
-  source). Keep it only until the rebase onto #116, which drops it; distribution already survives
-  without it. `bun install` produces a huge diff — expected, not something to clean up.
+- **`plugins/honcho/node_modules/` is no longer committed** (upstream #116). Run `bun install`
+  after cloning. Nothing that ships depends on it: the release bundle inlines every dependency.
+  If you see a huge node_modules diff, you are on a pre-rebase commit.
 - **A release bumps the version in two files** (`plugins/honcho/package.json` and
   `plugins/honcho/.claude-plugin/plugin.json`), plus `.claude-plugin/marketplace.json` when the
   release is user-visible. The fork uses a 4th segment (`0.2.5.3`) to sort above upstream's
