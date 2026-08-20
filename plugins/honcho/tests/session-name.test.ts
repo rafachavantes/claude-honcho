@@ -84,6 +84,17 @@ describe("getSessionName follows the repository root", () => {
     expect(sessionNameFor(worktree)).toBe("rafa-my-project");
   });
 
+  test("a root-keyed override is found from a subdirectory and from a worktree", () => {
+    // SessionStart keys the override it persists on sessionRootFor(cwd). This
+    // is the read side of that contract: one entry at the root must serve the
+    // whole repo, or every subdirectory visited would mint its own.
+    const overrideHome = join(base, "home-override");
+    writeHome(overrideHome, { sessions: { [repo]: "renamed-session" } });
+    expect(sessionNameFor(repo, overrideHome)).toBe("renamed-session");
+    expect(sessionNameFor(sub, overrideHome)).toBe("renamed-session");
+    expect(sessionNameFor(worktree, overrideHome)).toBe("renamed-session");
+  });
+
   test("non-git directory falls back to the raw cwd basename", () => {
     const plain = join(base, "plain-dir");
     mkdirSync(plain, { recursive: true });

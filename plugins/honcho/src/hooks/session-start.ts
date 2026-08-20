@@ -1,5 +1,5 @@
 import { Honcho } from "@honcho-ai/sdk";
-import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, getInjectOnCompact } from "../config.js";
+import { loadConfig, getSessionForPath, setSessionForPath, getSessionName, sessionRootFor, getHonchoClientOptions, isPluginEnabled, getCachedStdin, readStdinText, getObservationMode, getInjectionConfig, getInjectOnCompact } from "../config.js";
 import { renderSessionStart } from "../injection.js";
 import {
   setCachedSessionId,
@@ -149,8 +149,14 @@ export async function handleSessionStart(): Promise<void> {
     // Only persist session names for per-directory strategy (stable names).
     // Dynamic strategies (git-branch, chat-instance) change per session,
     // so locking them as overrides defeats the purpose.
-    if (!getSessionForPath(cwd) && (!config.sessionStrategy || config.sessionStrategy === "per-directory")) {
-      setSessionForPath(cwd, sessionName);
+    //
+    // Key the override on the same root the name was resolved from. Writing
+    // the raw cwd would mint one entry per subdirectory visited, and because
+    // getSessionForPath checks the exact cwd before the root, such an entry
+    // would later shadow a deliberate rename of the repo's own mapping.
+    const overrideKey = sessionRootFor(cwd) ?? cwd;
+    if (!getSessionForPath(overrideKey) && (!config.sessionStrategy || config.sessionStrategy === "per-directory")) {
+      setSessionForPath(overrideKey, sessionName);
     }
 
     // Upload git changes as observations (fire-and-forget)
