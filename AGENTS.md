@@ -31,8 +31,10 @@ wrote to `cache/honcho/honcho/`, a path Claude Code never reads for this install
 ## Gotchas
 
 - **The plugin is distributed from the `release/honcho` branch, not from `plugins/honcho`.**
-  `rafa-plugins/marketplace.json` points at `{source: github, repo: rafachavantes/claude-honcho,
-  ref: release/honcho}`. That branch holds the built bundle — `scripts/build.ts` output, which
+  `rafa-plugins/marketplace.json` points at `{source: url, url:
+  https://github.com/rafachavantes/claude-honcho.git, ref: release/honcho}`. Use the **`url`**
+  source, not `github`: `github` clones over SSH, which dies with `No ED25519 host key is known`
+  on any machine without github.com in `known_hosts`. `url` takes the https endpoint explicitly. That branch holds the built bundle — `scripts/build.ts` output, which
   inlines every dependency — so it runs on plain `node` with no `node_modules`. Publish a release
   with `bash plugins/honcho/scripts/publish-release-branch.sh` (build + smoke + validate, then a
   force push that rewrites the branch). **Nothing reaches the user until that script runs**, no
